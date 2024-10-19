@@ -1,6 +1,10 @@
 import ./[common, destructorimpl]
 
 type LowerByteTagged*[T: PointerLike] = distinct pointer
+  ## uses last byte as tag, shifts pointer left by a byte,
+  ## sign extends when converting to pointer
+  ## 
+  ## tag byte is addressable
 
 template doTagImplLowerByte[T](x: T, tag: uint): LowerByteTagged[T] =
   # no range check

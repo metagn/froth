@@ -1,6 +1,7 @@
 import ./[common, destructorimpl]
 
 type LowerBitsTagged*[T: PointerLike] = distinct pointer
+  ## tags the last 3 bits of the pointer in place
 
 template doTagImplLowerBits[T](x: T, tag: uint): LowerBitsTagged[T] =
   # no range check

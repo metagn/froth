@@ -1,6 +1,9 @@
 import ./[common, destructorimpl]
 
 type UpperByteTagged*[T: PointerLike] = distinct pointer
+  ## uses first byte as tag, sign extends when converting to pointer
+  ## 
+  ## tag byte is addressable
 
 const topByte = 0xFF.uint shl 56
 

@@ -1,6 +1,7 @@
 import ./[common, destructorimpl]
 
 type UpperBitsTagged*[T: PointerLike] = distinct pointer
+  ## shifts pointer 3 bits to the right, shifts 3 bit tag 61 bits to the left
 
 template doTagImplUpperBits[T](x: T, tag: uint): UpperBitsTagged[T] =
   # no range check
