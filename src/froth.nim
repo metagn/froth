@@ -1,4 +1,4 @@
-import froth/[lowerbits, lowerbyte, upperbits, upperbyte]
-export lowerbits, lowerbyte, upperbits, upperbyte
+import froth/[lowerbits, lowerbyte, lowershort, upperbits, upperbyte, uppershort]
+export lowerbits, lowerbyte, lowershort, upperbits, upperbyte, uppershort
 
 # missing nanboxes
