@@ -2,7 +2,7 @@
 
 version       = "0.1.0"
 author        = "metagn"
-description   = "description"
+description   = "tagged pointer types with destructors"
 license       = "MIT"
 srcDir        = "src"
 
@@ -25,7 +25,8 @@ task docs, "build docs for all modules":
 task tests, "run tests for multiple backends and defines":
   when declared(runTests):
     runTests(
-      backends = {c, #[js, nims]#},
+      optionCombos = @["--mm:refc", "--mm:orc"],
+      backends = {c, cpp},
     )
   else:
     echo "tests task not implemented, need nimbleutils"

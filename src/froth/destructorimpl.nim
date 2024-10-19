@@ -32,7 +32,8 @@ template implDestructors*(Name: untyped, doTagImpl, untagImpl, getTagImpl: untyp
 
   proc `=dup`*[T](x: Name[T]): Name[T] {.nodestroy.} =
     let t = getTagImpl(x)
-    result = doTagImpl(`=dup`(untagImpl(x)), t)
+    let p = `=dup`(untagImpl(x))
+    result = doTagImpl(p, t)
 
   proc `=trace`*[T](x: var Name[T]; env: pointer) {.nodestroy.} =
     let orig = cast[pointer](x)

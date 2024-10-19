@@ -1,15 +1,20 @@
+when (compiles do: import nimbleutils/bridge):
+  import nimbleutils/bridge
+else:
+  import unittest
+
 import froth/lowerbits
 
-block: # basic
+test "basic":
   var x = new(int)
   x[] = 123
   var tagged = tagLowerBits(x, 5)
-  doAssert tagged.tag == 5
-  doAssert tagged.untag[] == 123
-  doAssert tagged.tag == 5
+  check tagged.tag == 5
+  check tagged.untag[] == 123
+  check tagged.tag == 5
   tagged.untag[] += 2
-  doAssert tagged.untag[] == 125
-  doAssert sizeof(tagged) == sizeof(x)
+  check tagged.untag[] == 125
+  check sizeof(tagged) == sizeof(x)
 
 type
   Owner = ref object
@@ -40,9 +45,9 @@ proc `$`(x: Subject): string =
   result.add(" and tag ")
   result.add($x.owner.tag)
 
-block: # simple cycle
+test "simple cycle":
   var owner = Owner(name: "O")
   var subjectA = Subject(name: "A", owner: tagLowerBits(owner, 5))
   owner.subject = tagLowerBits(subjectA, 7)
-  doAssert $owner == "owner O with subject A and tag 7"
-  doAssert $subjectA == "subject A with owner O and tag 5"
+  check $owner == "owner O with subject A and tag 7"
+  check $subjectA == "subject A with owner O and tag 5"

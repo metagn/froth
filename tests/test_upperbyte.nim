@@ -1,23 +1,28 @@
+when (compiles do: import nimbleutils/bridge):
+  import nimbleutils/bridge
+else:
+  import unittest
+
 import froth/upperbyte
 
-block: # basic
+test "basic":
   var x = new(int)
   x[] = 123
   var tagged = tagUpperByte(x, 5)
-  doAssert tagged.tag == 5
-  doAssert tagged.untag[] == 123
-  doAssert tagged.tag == 5
+  check tagged.tag == 5
+  check tagged.untag[] == 123
+  check tagged.tag == 5
   tagged.untag[] += 2
-  doAssert tagged.untag[] == 125
-  doAssert sizeof(tagged) == sizeof(x)
+  check tagged.untag[] == 125
+  check sizeof(tagged) == sizeof(x)
 
-block: # addressable tag
+test "addressable tag":
   var x = new(int)
   x[] = 123
   var tagged = tagUpperByte(x, 5)
-  doAssert tagged.tag == 5
+  check tagged.tag == 5
   tagged.tag += 2
-  doAssert tagged.tag == 7
+  check tagged.tag == 7
 
 type
   Owner = ref object
@@ -48,9 +53,9 @@ proc `$`(x: Subject): string =
   result.add(" and tag ")
   result.add($x.owner.tag)
 
-block: # simple cycle
+test "simple cycle":
   var owner = Owner(name: "O")
   var subjectA = Subject(name: "A", owner: tagUpperByte(owner, 65))
   owner.subject = tagUpperByte(subjectA, 97)
-  doAssert $owner == "owner O with subject A and tag 97"
-  doAssert $subjectA == "subject A with owner O and tag 65"
+  check $owner == "owner O with subject A and tag 97"
+  check $subjectA == "subject A with owner O and tag 65"
