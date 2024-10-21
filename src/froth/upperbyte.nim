@@ -33,3 +33,9 @@ proc tag*[T](p: var UpperByteTagged[T]): var byte {.inline.} =
 
 proc untag*[T](p: UpperByteTagged[T]): T {.inline.} =
   untagImplUpperByte(p)
+
+template isNil*[T](p: UpperByteTagged[T]): bool =
+  p.untag.isNil
+
+template `[]`*[T](p: UpperByteTagged[T]): T =
+  p.untag[]

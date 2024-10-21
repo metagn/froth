@@ -32,3 +32,9 @@ proc tag*[T](p: var LowerByteTagged[T]): var byte {.inline.} =
 
 proc untag*[T](p: LowerByteTagged[T]): T {.inline.} =
   untagImplLowerByte(p)
+
+template isNil*[T](p: LowerByteTagged[T]): bool =
+  p.untag.isNil
+
+template `[]`*[T](p: LowerByteTagged[T]): T =
+  p.untag[]

@@ -32,3 +32,9 @@ proc tag*[T](p: var LowerShortTagged[T]): var uint16 {.inline.} =
 
 proc untag*[T](p: LowerShortTagged[T]): T {.inline.} =
   untagImplLowerShort(p)
+
+template isNil*[T](p: LowerShortTagged[T]): bool =
+  p.untag.isNil
+
+template `[]`*[T](p: LowerShortTagged[T]): T =
+  p.untag[]

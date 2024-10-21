@@ -23,3 +23,9 @@ proc tag*[T](p: UpperBitsTagged[T]): range[0..7] {.inline.} =
 
 proc untag*[T](p: UpperBitsTagged[T]): T {.inline.} =
   untagImplUpperBits(p)
+
+template isNil*[T](p: UpperBitsTagged[T]): bool =
+  p.untag.isNil
+
+template `[]`*[T](p: UpperBitsTagged[T]): T =
+  p.untag[]

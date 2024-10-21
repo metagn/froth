@@ -6,7 +6,8 @@ template implDestructors*(Name: untyped, doTagImpl, untagImpl, getTagImpl: untyp
 
   when defined(nimAllowNonVarDestructor) and defined(gcDestructors):
     proc `=destroy`*[T](x: Name[T]) {.nodestroy.} =
-      `=destroy`(untagImpl(x))
+      {.cast(raises: []).}:
+        `=destroy`(untagImpl(x))
   else:
     {.push warning[Deprecated]: off.}
     proc `=destroy`*[T](x: var Name[T]) {.nodestroy.} =
