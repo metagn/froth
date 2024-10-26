@@ -1,3 +1,3 @@
 # froth
 
-tagged pointer types with destructors, currently only 64-bit
+tagged pointer types with destructors, focusing on 64-bit

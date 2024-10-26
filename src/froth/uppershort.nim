@@ -5,17 +5,18 @@ type UpperShortTagged*[T: PointerLike] = distinct pointer
   ## 
   ## tag bytes are addressable
 
-const topShort = 0xFFFF.uint shl 48
+const remainingBits = sizeof(int) * 8 - 16
+const topShort = 0xFFFF.uint shl remainingBits
 
 template doTagImplUpperShort[T](x: T, tag: uint): UpperShortTagged[T] =
   # no range check
-  cast[UpperShortTagged[T]]((cast[uint](cast[pointer](x)) and not topShort) or (tag shl 48))
+  cast[UpperShortTagged[T]]((cast[uint](cast[pointer](x)) and not topShort) or (tag shl remainingBits))
 
 template untagImplUpperShort[T](x: UpperShortTagged[T]): T =
   cast[T](ashr(cast[int](x) shl 16, 16))
 
 template getTagImplUpperShort[T](x: UpperShortTagged[T]): uint =
-  (cast[uint](x) and topShort) shr 48 
+  (cast[uint](x) and topShort) shr remainingBits
 
 implDestructors(UpperShortTagged, doTagImplUpperShort, untagImplUpperShort, getTagImplUpperShort)
 
