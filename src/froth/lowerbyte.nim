@@ -6,17 +6,22 @@ type LowerByteTagged*[T: PointerLike] = distinct pointer
   ## 
   ## tag byte is addressable
 
+proc isPointer*[T](x: LowerByteTagged[T]): bool {.nodestroy, inline.} =
+  ## overload to make sure destructors dont treat this value as a pointer depending on the tag
+  ## if false, treated as raw bits (i.e. not nested or pointing to other data)
+  true
+
 template doTagImplLowerByte[T](x: T, tag: uint): LowerByteTagged[T] =
   # no range check
   cast[LowerByteTagged[T]]((cast[uint](cast[pointer](x)) shl 8) or tag)
 
-template untagImplLowerByte[T](x: LowerByteTagged[T]): T =
-  cast[T](ashr(cast[int](x), 8))
+template untagRawImplLowerByte[T](x: LowerByteTagged[T]): int =
+  ashr(cast[int](x), 8)
 
 template getTagImplLowerByte[T](x: LowerByteTagged[T]): uint =
   cast[uint](x) and 0xFF
 
-implDestructors(LowerByteTagged, doTagImplLowerByte, untagImplLowerByte, getTagImplLowerByte)
+implDestructors(LowerByteTagged, doTagImplLowerByte, untagRawImplLowerByte, getTagImplLowerByte)
 
 proc tagLowerByte*[T: PointerLike](p: T, tag: byte): LowerByteTagged[T] {.inline.} =
   doTagImplLowerByte(p, uint(tag))
@@ -31,10 +36,13 @@ proc tag*[T](p: var LowerByteTagged[T]): var byte {.inline.} =
     cast[ptr array[8, byte]](addr p)[7]
 
 proc untag*[T](p: LowerByteTagged[T]): T {.inline.} =
-  untagImplLowerByte(p)
+  cast[T](untagRawImplLowerByte(p))
+
+proc untagRaw*[T](p: LowerByteTagged[T]): int {.inline.} =
+  untagRawImplLowerByte(p)
 
 template isNil*[T](p: LowerByteTagged[T]): bool =
   p.untag.isNil
 
-template `[]`*[T](p: LowerByteTagged[T]): T =
+template `[]`*[T](p: LowerByteTagged[T]): untyped =
   p.untag[]
