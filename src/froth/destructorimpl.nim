@@ -36,7 +36,7 @@ template implDestructors*(Name: untyped, doTagImpl, untagRawImpl, getTagImpl: un
       dest = src
     else:
       mixin isPointer
-      if isPointer(x):
+      if isPointer(src):
         let t = getTagImpl(src)
         `=sink`(cast[ptr T](addr dest)[], cast[T](untagRawImpl(src)))
         dest = doTagImpl(cast[T](dest), t)
