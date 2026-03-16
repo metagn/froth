@@ -38,5 +38,5 @@ proc untag*[T](p: UpperByteTagged[T]): T {.inline.} =
 template isNil*[T](p: UpperByteTagged[T]): bool =
   p.untag.isNil
 
-template `[]`*[T](p: UpperByteTagged[T]): T =
+template `[]`*[T](p: UpperByteTagged[T]): untyped =
   p.untag[]
