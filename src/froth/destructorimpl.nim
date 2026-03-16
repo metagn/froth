@@ -1,43 +1,61 @@
 import std/typetraits
 
-template implDestructors*(Name: untyped, doTagImpl, untagImpl, getTagImpl: untyped) =
+template implDestructors*(Name: untyped, doTagImpl, untagRawImpl, getTagImpl: untyped) =
   proc `=wasMoved`*[T](x: var Name[T]) {.nodestroy, inline.} =
-    x = cast[Name[T]](pointer(nil))
+    x = default(Name[T]) # cast[Name[T]](pointer(nil))
 
   when defined(nimAllowNonVarDestructor) and defined(gcDestructors):
     proc `=destroy`*[T](x: Name[T]) {.nodestroy.} =
-      {.cast(raises: []).}:
-        `=destroy`(untagImpl(x))
+      mixin isPointer
+      if isPointer(x):
+        {.cast(raises: []).}:
+          `=destroy`(cast[T](untagRawImpl(x)))
   else:
     {.push warning[Deprecated]: off.}
     proc `=destroy`*[T](x: var Name[T]) {.nodestroy.} =
-      x = cast[Name[T]](untagImpl(x))
-      `=destroy`(cast[ptr T](addr x)[])
+      mixin isPointer
+      if isPointer(x):
+        x = cast[Name[T]](untagRawImpl(x))
+        `=destroy`(cast[ptr T](addr x)[])
     {.pop.}
 
   proc `=copy`*[T](dest: var Name[T], src: Name[T]) {.nodestroy.} =
     when supportsCopyMem(T):
       dest = src
     else:
-      let t = getTagImpl(src)
-      `=copy`(cast[ptr T](addr dest)[], untagImpl(src))
-      dest = doTagImpl(cast[T](dest), t)
+      mixin isPointer
+      if isPointer(src):
+        let t = getTagImpl(src)
+        `=copy`(cast[ptr T](addr dest)[], cast[T](untagRawImpl(src)))
+        dest = doTagImpl(cast[T](dest), t)
+      else:
+        dest = src
 
   proc `=sink`*[T](dest: var Name[T], src: Name[T]) {.nodestroy.} =
     when supportsCopyMem(T) or T is ref: # supportsMoveMem
       dest = src
     else:
-      let t = getTagImpl(src)
-      `=sink`(cast[ptr T](addr dest)[], untagImpl(src))
-      dest = doTagImpl(cast[T](dest), t)
+      mixin isPointer
+      if isPointer(x):
+        let t = getTagImpl(src)
+        `=sink`(cast[ptr T](addr dest)[], cast[T](untagRawImpl(src)))
+        dest = doTagImpl(cast[T](dest), t)
+      else:
+        dest = src
 
   proc `=dup`*[T](x: Name[T]): Name[T] {.nodestroy.} =
-    let t = getTagImpl(x)
-    let p = `=dup`(untagImpl(x))
-    result = doTagImpl(p, t)
+    mixin isPointer
+    if isPointer(x):
+      let t = getTagImpl(x)
+      let p = `=dup`(cast[T](untagRawImpl(x)))
+      result = doTagImpl(p, t)
+    else:
+      result = x
 
   proc `=trace`*[T](x: var Name[T]; env: pointer) {.nodestroy.} =
-    let orig = cast[pointer](x)
-    x = cast[Name[T]](untagImpl(x))
-    `=trace`(cast[ptr T](addr x)[], env)
-    x = cast[Name[T]](orig)
+    mixin isPointer
+    if isPointer(x):
+      let orig = cast[pointer](x)
+      x = cast[Name[T]](untagRawImpl(x))
+      `=trace`(cast[ptr T](addr x)[], env)
+      x = cast[Name[T]](orig)
