@@ -5,14 +5,18 @@ type
   LowerBits* = distinct LowerBitsImpl
     ## tags the last 3 bits of the pointer in place
 
-proc tag*(val: uint, tag: LowerBits): Tagged[uint, LowerBits] {.inline, nodestroy.} =
+template tagInline*(val: uint, tag: LowerBits): Tagged[uint, LowerBits] =
   Tagged[uint, LowerBits](raw: val or tag.uint)
 
-proc untag*(tagged: Tagged[uint, LowerBits]): uint {.inline, nodestroy.} =
+template untagInline*(tagged: Tagged[uint, LowerBits]): uint =
   tagged.raw and not 0b111'u
 
-proc splitTag*(tagged: Tagged[uint, LowerBits]): LowerBits {.inline, nodestroy.} =
+template splitTagInline*(tagged: Tagged[uint, LowerBits]): LowerBits =
   LowerBits(tagged.raw and 0b111)
+
+proc tag*(val: uint, tag: LowerBits): Tagged[uint, LowerBits] {.inline.} = tagInline(val, tag)
+proc untag*(tagged: Tagged[uint, LowerBits]): uint {.inline.} = untagInline(tagged)
+proc splitTag*(tagged: Tagged[uint, LowerBits]): LowerBits {.inline.} = splitTagInline(tagged)
 
 implUintPointerTags(LowerBits)
 

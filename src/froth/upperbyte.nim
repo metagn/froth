@@ -10,20 +10,25 @@ type
 const remainingBits = sizeof(int) * 8 - 8
 const topByte = 0xFF.uint shl remainingBits
 
-proc tag*(val: uint, tag: UpperByte): Tagged[uint, UpperByte] {.inline, nodestroy.} =
+template tagInline*(val: uint, tag: UpperByte): Tagged[uint, UpperByte] =
   Tagged[uint, UpperByte](raw: (val and not topByte) or (tag.uint shl remainingBits))
 
-proc untag*(tagged: Tagged[uint, UpperByte]): uint {.inline, nodestroy.} =
+template untagInline*(tagged: Tagged[uint, UpperByte]): uint =
   cast[uint](ashr(cast[int](tagged.raw) shl 8, 8))
 
-proc splitTag*(tagged: Tagged[uint, UpperByte]): UpperByte {.inline, nodestroy.} =
+template splitTagInline*(tagged: Tagged[uint, UpperByte]): UpperByte =
   UpperByte((tagged.raw and topByte) shr remainingBits)
 
-proc splitTagMut*(tagged: var Tagged[uint, UpperByte]): var UpperByte {.inline, nodestroy.} =
+template splitTagMutInline*(tagged: var Tagged[uint, UpperByte]): var UpperByte =
   when cpuEndian == littleEndian:
     cast[ptr array[8, UpperByte]](addr tagged)[7]
   else:
     cast[ptr UpperByte](addr tagged)[]
+
+proc tag*(val: uint, tag: UpperByte): Tagged[uint, UpperByte] {.inline.} = tagInline(val, tag)
+proc untag*(tagged: Tagged[uint, UpperByte]): uint {.inline.} = untagInline(tagged)
+proc splitTag*(tagged: Tagged[uint, UpperByte]): UpperByte {.inline.} = splitTagInline(tagged)
+proc splitTagMut*(tagged: var Tagged[uint, UpperByte]): var UpperByte {.inline.} = splitTagMutInline(tagged)
 
 implUintPointerTags(UpperByte, splitTagVar = true)
 

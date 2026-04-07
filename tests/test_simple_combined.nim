@@ -13,7 +13,7 @@ test "basic combination":
   var y = x.tagLowerBits(7).tagUpperByte(150)
   check y.getTag == 150
   check y.untag.getTag == 7
-  y.getTag += 3
+  y.getTagMut += 3
   check y.getTag == 153
   check y.untag.getTag == 7
   check y.untag.untag[] == 123

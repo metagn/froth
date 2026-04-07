@@ -7,14 +7,18 @@ type
 
 const remainingBits = sizeof(int) * 8 - 3
 
-proc tag*(val: uint, tag: UpperBits): Tagged[uint, UpperBits] {.inline, nodestroy.} =
+template tagInline*(val: uint, tag: UpperBits): Tagged[uint, UpperBits] =
   Tagged[uint, UpperBits](raw: (val shr 3) or (tag.uint shl remainingBits))
 
-proc untag*(tagged: Tagged[uint, UpperBits]): uint {.inline, nodestroy.} =
+template untagInline*(tagged: Tagged[uint, UpperBits]): uint =
   tagged.raw shl 3
 
-proc splitTag*(tagged: Tagged[uint, UpperBits]): UpperBits {.inline, nodestroy.} =
+template splitTagInline*(tagged: Tagged[uint, UpperBits]): UpperBits =
   UpperBits(tagged.raw shr remainingBits)
+
+proc tag*(val: uint, tag: UpperBits): Tagged[uint, UpperBits] {.inline.} = tagInline(val, tag)
+proc untag*(tagged: Tagged[uint, UpperBits]): uint {.inline.} = untagInline(tagged)
+proc splitTag*(tagged: Tagged[uint, UpperBits]): UpperBits {.inline.} = splitTagInline(tagged)
 
 implUintPointerTags(UpperBits)
 

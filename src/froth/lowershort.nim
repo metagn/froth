@@ -8,20 +8,25 @@ type
     ## 
     ## tag bytes are addressable
 
-proc tag*(val: uint, tag: LowerShort): Tagged[uint, LowerShort] {.inline, nodestroy.} =
+template tagInline*(val: uint, tag: LowerShort): Tagged[uint, LowerShort] =
   Tagged[uint, LowerShort](raw: (val shl 16) or tag.uint)
 
-proc untag*(tagged: Tagged[uint, LowerShort]): uint {.inline, nodestroy.} =
+template untagInline*(tagged: Tagged[uint, LowerShort]): uint =
   cast[uint](ashr(cast[int](tagged.raw), 16))
 
-proc splitTag*(tagged: Tagged[uint, LowerShort]): LowerShort {.inline, nodestroy.} =
+template splitTagInline*(tagged: Tagged[uint, LowerShort]): LowerShort =
   LowerShort(tagged.raw and 0xFFFF)
 
-proc splitTagMut*(tagged: var Tagged[uint, LowerShort]): var LowerShort {.inline, nodestroy.} =
+template splitTagMutInline*(tagged: var Tagged[uint, LowerShort]): var LowerShort =
   when cpuEndian == littleEndian:
     cast[ptr LowerShort](addr tagged)[]
   else:
     cast[ptr array[4, LowerShort]](addr tagged)[3]
+
+proc tag*(val: uint, tag: LowerShort): Tagged[uint, LowerShort] {.inline.} = tagInline(val, tag)
+proc untag*(tagged: Tagged[uint, LowerShort]): uint {.inline.} = untagInline(tagged)
+proc splitTag*(tagged: Tagged[uint, LowerShort]): LowerShort {.inline.} = splitTagInline(tagged)
+proc splitTagMut*(tagged: var Tagged[uint, LowerShort]): var LowerShort {.inline.} = splitTagMutInline(tagged)
 
 implUintPointerTags(LowerShort, splitTagVar = true)
 
