@@ -21,6 +21,6 @@ for dir in ["tests"]:
 runTests(
   tests,
   # refc completely broken
-  optionCombos = @[#["--mm:refc",]# "--mm:orc"],
+  optionCombos = @["--mm:refc", "--mm:orc"],
   backends = {c, cpp},
 )
