@@ -1,18 +1,63 @@
 import std/typetraits
 
-type Tagged*[T, Tag] = object
-  # object rather than distinct for destructors to work (`=dup` disagrees on cyclic parameter)
-  raw*: T
+const isBytes = defined(gcRefc) and true
+  # breaks with forward types except in devel
+const isPointer = defined(gcRefc) and true
 
-template rawTagged*[T, Tag](x: T): Tagged[T, Tag] =
-  Tagged[T, Tag](raw: x)
+type RawBytes[T] {.used.} = array[sizeof(T), byte]
+
+when isBytes:
+  type Tagged*[T, Tag] = object
+    rawBytes*: RawBytes[T]
+
+  template rawValue*[T, Tag](x: Tagged[T, Tag]): T =
+    cast[T](x.rawBytes)
+  template rawValueMut*[T, Tag](x: var Tagged[T, Tag]): T =
+    cast[ptr T](addr x.rawBytes)[]
+  template setRaw*[T, Tag](x: var Tagged[T, Tag], val: T) =
+    x.rawBytes = cast[RawBytes[T]](val)
+  template rawTagged*[T, Tag](x: T): Tagged[T, Tag] =
+    Tagged[T, Tag](rawBytes: cast[RawBytes[T]](x))
+elif isPointer:
+  type Tagged*[T, Tag] = object
+    rawPointer*: pointer
+
+  template rawValue*[T, Tag](x: Tagged[T, Tag]): T =
+    cast[T](x.rawPointer)
+  template rawValueMut*[T, Tag](x: var Tagged[T, Tag]): T =
+    cast[ptr T](addr x.rawPointer)[]
+  template setRaw*[T, Tag](x: var Tagged[T, Tag], val: T) =
+    x.rawPointer = cast[pointer](val)
+  template rawTagged*[T, Tag](x: T): Tagged[T, Tag] =
+    Tagged[T, Tag](rawPointer: cast[pointer](x))
+else:
+  type Tagged*[T, Tag] = object
+    # object rather than distinct for destructors to work (`=dup` disagrees on cyclic parameter)
+    raw*: T
+
+  template rawValue*[T, Tag](x: Tagged[T, Tag]): T =
+    x.raw
+  template rawValueMut*[T, Tag](x: var Tagged[T, Tag]): T =
+    x.raw
+  template setRaw*[T, Tag](x: var Tagged[T, Tag], val: T) =
+    when false:
+      cast[ptr RawBytes[T]](addr x.raw)[] = cast[RawBytes[T]](val)
+    else:
+      x.raw = val
+  template rawTagged*[T, Tag](x: T): Tagged[T, Tag] =
+    Tagged[T, Tag](raw: x)
 
 # tag types need to implement tagInline/splitTagInline/untagInline as templates,
 # procs with inline + nodestroy infinitely recurse on orc for some reason
 # XXX destructors do not call destructors for the tag, maybe document
 
 proc `=wasMoved`*[T, Tag](x: var Tagged[T, Tag]) {.nodestroy, inline.} =
-  `=wasMoved`(x.raw)
+  when isBytes:
+    x.rawBytes = default(RawBytes[T])#pointer(nil)
+  elif isPointer:
+    x.rawPointer = pointer(nil)
+  else:
+    `=wasMoved`(x.raw)
 
 when defined(nimAllowNonVarDestructor) and defined(gcDestructors):
   proc `=destroy`*[T, Tag](x: Tagged[T, Tag]) {.nodestroy.} =
@@ -26,10 +71,10 @@ else:
   {.push warning[Deprecated]: off.}
   proc `=destroy`*[T, Tag](x: var Tagged[T, Tag]) {.nodestroy.} =
     mixin untagInline
+    x.setRaw untagInline(x)
+    `=destroy`(x.rawValueMut)
     #cast[ptr T](addr x)[] = untag(x)
-    x.raw = untagInline(x)
     #`=destroy`(cast[ptr T](x)[])
-    `=destroy`(x.raw)
   {.pop.}
 
 proc `=copy`*[T, Tag](dest: var Tagged[T, Tag], src: Tagged[T, Tag]) {.nodestroy.} =
@@ -37,21 +82,25 @@ proc `=copy`*[T, Tag](dest: var Tagged[T, Tag], src: Tagged[T, Tag]) {.nodestroy
     dest = src
   else:
     let t = splitTagInline(src)
-    `=copy`(dest.raw, untagInline(src))
-    dest = tagInline(dest.raw, t)
+    `=copy`(dest.rawValueMut, untagInline(src))
+    dest = tagInline(dest.rawValue, t)
 
 proc `=sink`*[T, Tag](dest: var Tagged[T, Tag], src: Tagged[T, Tag]) {.nodestroy.} =
   when supportsCopyMem(T) or T is ref: # supportsMoveMem
     dest = src
   else:
     let t = splitTagInline(src)
-    `=sink`(dest.raw, untagInline(src))
-    dest = tagInline(dest.raw, t)
+    `=sink`(dest.rawValueMut, untagInline(src))
+    dest = tagInline(dest.rawValue, t)
 
 proc `=dup`*[T, Tag](x: Tagged[T, Tag]): Tagged[T, Tag] {.nodestroy.} =
   mixin splitTagInline, untagInline, tagInline
   when supportsCopyMem(T):
     result = x
+  elif defined(gcRefc):
+    let t = splitTagInline(x)
+    `=copy`(result.rawValueMut, untagInline(x))
+    result = tagInline(result.rawValue, t)
   else:
     let t = splitTagInline(x)
     let p = `=dup`(untagInline(x))
@@ -59,15 +108,21 @@ proc `=dup`*[T, Tag](x: Tagged[T, Tag]): Tagged[T, Tag] {.nodestroy.} =
 
 proc `=trace`*[T, Tag](x: var Tagged[T, Tag]; env: pointer) {.nodestroy.} =
   mixin splitTagInline, untagInline, tagInline
-  when false:
-    let orig = cast[pointer](x)
-    x = cast[Tagged[T, Tag]](untagImpl(x))
-    `=trace`(cast[ptr T](addr x)[], env)
-    x = cast[Tagged[T, Tag]](orig)
-  let orig = x.raw
-  x.raw = untagInline(x)
-  `=trace`(x.raw, env)
-  x.raw = orig
+  when isBytes:
+    let orig = x.rawBytes
+    x.rawBytes = cast[RawBytes[T]](untagInline(x))
+    `=trace`(cast[ptr T](addr x.rawBytes)[], env)
+    x.rawBytes = orig
+  elif isPointer:
+    let orig = x.rawPointer
+    x.rawPointer = cast[pointer](untagInline(x))
+    `=trace`(cast[ptr T](addr x.rawPointer)[], env)
+    x.rawPointer = orig
+  else:
+    let orig = x.raw
+    x.raw = untagInline(x)
+    `=trace`(x.raw, env)
+    x.raw = orig
 
 when false:
   type SomeTag*[T] = concept

@@ -14,10 +14,10 @@ template tagInline*(val: uint, tag: UpperShort): Tagged[uint, UpperShort] =
   rawTagged[uint, UpperShort]((val and not topShort) or (tag.uint shl remainingBits))
 
 template untagInline*(tagged: Tagged[uint, UpperShort]): uint =
-  cast[uint](ashr(cast[int](tagged.raw) shl 16, 16))
+  cast[uint](ashr(cast[int](tagged.rawValue) shl 16, 16))
 
 template splitTagInline*(tagged: Tagged[uint, UpperShort]): UpperShort =
-  UpperShort((tagged.raw and topShort) shr remainingBits)
+  UpperShort((tagged.rawValue and topShort) shr remainingBits)
 
 template splitTagMutInline*(tagged: var Tagged[uint, UpperShort]): var UpperShort =
   when cpuEndian == littleEndian:

@@ -9,10 +9,10 @@ template tagInline*(val: uint, tag: Lower2Bits): Tagged[uint, Lower2Bits] =
   rawTagged[uint, Lower2Bits](val or tag.uint)
 
 template untagInline*(tagged: Tagged[uint, Lower2Bits]): uint =
-  tagged.raw and not 0b11'u
+  tagged.rawValue and not 0b11'u
 
 template splitTagInline*(tagged: Tagged[uint, Lower2Bits]): Lower2Bits =
-  Lower2Bits(tagged.raw and 0b11)
+  Lower2Bits(tagged.rawValue and 0b11)
 
 proc tag*(val: uint, tag: Lower2Bits): Tagged[uint, Lower2Bits] {.inline.} = tagInline(val, tag)
 proc untag*(tagged: Tagged[uint, Lower2Bits]): uint {.inline.} = untagInline(tagged)
