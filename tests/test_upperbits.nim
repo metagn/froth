@@ -9,9 +9,9 @@ test "basic":
   var x = new(int)
   x[] = 123
   var tagged = tagUpperBits(x, 5)
-  check tagged.tag == 5
+  check tagged.getTag == 5
   check tagged.untag[] == 123
-  check tagged.tag == 5
+  check tagged.getTag == 5
   tagged.untag[] += 2
   check tagged.untag[] == 125
   check sizeof(tagged) == sizeof(x)
@@ -35,7 +35,7 @@ proc `$`(x: Owner): string =
       result.add("subject ")
       result.add(x.subject.untag.name)
     result.add(" and tag ")
-    result.add($x.subject.tag)
+    result.add($x.subject.getTag)
 proc `$`(x: Subject): string =
   result = "subject " & x.name & " with "
   if x.owner.untag == nil:
@@ -43,7 +43,7 @@ proc `$`(x: Subject): string =
   else:
     result.add("owner " & $x.owner.untag.name)
   result.add(" and tag ")
-  result.add($x.owner.tag)
+  result.add($x.owner.getTag)
 
 test "simple cycle":
   var owner = Owner(name: "O")

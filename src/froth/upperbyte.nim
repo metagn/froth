@@ -1,42 +1,36 @@
-import ./[common, destructorimpl]
+import ./common
 
-type UpperByteTagged*[T: PointerLike] = distinct pointer
-  ## uses first byte as tag, sign extends when converting to pointer
-  ## 
-  ## tag byte is addressable
+type
+  UpperByteImpl* = byte
+  UpperByte* = distinct UpperByteImpl
+    ## uses first byte as tag, sign extends when converting to pointer
+    ## 
+    ## tag byte is addressable
 
 const remainingBits = sizeof(int) * 8 - 8
 const topByte = 0xFF.uint shl remainingBits
 
-template doTagImplUpperByte[T](x: T, tag: uint): UpperByteTagged[T] =
-  # no range check
-  cast[UpperByteTagged[T]]((cast[uint](cast[pointer](x)) and not topByte) or (tag shl remainingBits))
+proc tag*(val: uint, tag: UpperByte): Tagged[uint, UpperByte] {.inline, nodestroy.} =
+  typeof(result)((val and not topByte) or (tag.uint shl remainingBits))
 
-template untagImplUpperByte[T](x: UpperByteTagged[T]): T =
-  cast[T](ashr(cast[int](x) shl 8, 8))
+proc untag*(tagged: Tagged[uint, UpperByte]): uint {.inline, nodestroy.} =
+  cast[uint](ashr(cast[int](tagged) shl 8, 8))
 
-template getTagImplUpperByte[T](x: UpperByteTagged[T]): uint =
-  (cast[uint](x) and topByte) shr remainingBits 
+proc splitTag*(tagged: Tagged[uint, UpperByte]): UpperByte {.inline, nodestroy.} =
+  typeof(result)((uint(tagged) and topByte) shr remainingBits)
 
-implDestructors(UpperByteTagged, doTagImplUpperByte, untagImplUpperByte, getTagImplUpperByte)
-
-proc tagUpperByte*[T: PointerLike](p: T, tag: byte): UpperByteTagged[T] {.inline.} =
-  doTagImplUpperByte(p, uint(tag))
-
-proc tag*[T](p: UpperByteTagged[T]): byte {.inline.} =
-  cast[byte](getTagImplUpperByte(p))
-
-proc tag*[T](p: var UpperByteTagged[T]): var byte {.inline.} =
+proc splitTag*(tagged: var Tagged[uint, UpperByte]): var UpperByte {.inline, nodestroy.} =
   when cpuEndian == littleEndian:
-    cast[ptr array[8, byte]](addr p)[7]
+    cast[ptr array[8, UpperByte]](addr tagged)[7]
   else:
-    cast[ptr byte](addr p)[]
+    cast[ptr UpperByte](addr tagged)[]
 
-proc untag*[T](p: UpperByteTagged[T]): T {.inline.} =
-  untagImplUpperByte(p)
+implUintPointerTags(UpperByte, splitTagVar = true)
 
-template isNil*[T](p: UpperByteTagged[T]): bool =
-  p.untag.isNil
+type UpperByteTagged*[T] = Tagged[T, UpperByte]
 
-template `[]`*[T](p: UpperByteTagged[T]): untyped =
-  p.untag[]
+proc tagUpperByte*[T](val: T, tag: UpperByteImpl): UpperByteTagged[T] {.inline.} =
+  tag(val, UpperByte(tag))
+
+template getTag*[T](tagged: UpperByteTagged[T]): UpperByteImpl =
+  UpperByteImpl(splitTag(tagged))

@@ -1,42 +1,36 @@
-import ./[common, destructorimpl]
+import ./common
 
-type UpperShortTagged*[T: PointerLike] = distinct pointer
-  ## uses first 2 bytes as tag, sign extends when converting to pointer
-  ## 
-  ## tag bytes are addressable
+type
+  UpperShortImpl* = uint16
+  UpperShort* = distinct UpperShortImpl
+    ## uses first 2 bytes as tag, sign extends when converting to pointer
+    ## 
+    ## tag bytes are addressable
 
 const remainingBits = sizeof(int) * 8 - 16
 const topShort = 0xFFFF.uint shl remainingBits
 
-template doTagImplUpperShort[T](x: T, tag: uint): UpperShortTagged[T] =
-  # no range check
-  cast[UpperShortTagged[T]]((cast[uint](cast[pointer](x)) and not topShort) or (tag shl remainingBits))
+proc tag*(val: uint, tag: UpperShort): Tagged[uint, UpperShort] {.inline, nodestroy.} =
+  typeof(result)((val and not topShort) or (tag.uint shl remainingBits))
 
-template untagImplUpperShort[T](x: UpperShortTagged[T]): T =
-  cast[T](ashr(cast[int](x) shl 16, 16))
+proc untag*(tagged: Tagged[uint, UpperShort]): uint {.inline, nodestroy.} =
+  cast[uint](ashr(cast[int](tagged) shl 16, 16))
 
-template getTagImplUpperShort[T](x: UpperShortTagged[T]): uint =
-  (cast[uint](x) and topShort) shr remainingBits
+proc splitTag*(tagged: Tagged[uint, UpperShort]): UpperShort {.inline, nodestroy.} =
+  typeof(result)((uint(tagged) and topShort) shr remainingBits)
 
-implDestructors(UpperShortTagged, doTagImplUpperShort, untagImplUpperShort, getTagImplUpperShort)
-
-proc tagUpperShort*[T: PointerLike](p: T, tag: uint16): UpperShortTagged[T] {.inline.} =
-  doTagImplUpperShort(p, uint(tag))
-
-proc tag*[T](p: UpperShortTagged[T]): uint16 {.inline.} =
-  cast[uint16](getTagImplUpperShort(p))
-
-proc tag*[T](p: var UpperShortTagged[T]): var uint16 {.inline.} =
+proc splitTag*(tagged: var Tagged[uint, UpperShort]): var UpperShort {.inline, nodestroy.} =
   when cpuEndian == littleEndian:
-    cast[ptr array[4, uint16]](addr p)[3]
+    cast[ptr array[4, UpperShort]](addr tagged)[3]
   else:
-    cast[ptr uint16](addr p)[]
+    cast[ptr UpperShort](addr tagged)[]
 
-proc untag*[T](p: UpperShortTagged[T]): T {.inline.} =
-  untagImplUpperShort(p)
+implUintPointerTags(UpperShort, splitTagVar = true)
 
-template isNil*[T](p: UpperShortTagged[T]): bool =
-  p.untag.isNil
+type UpperShortTagged*[T] = Tagged[T, UpperShort]
 
-template `[]`*[T](p: UpperShortTagged[T]): untyped =
-  p.untag[]
+proc tagUpperShort*[T](val: T, tag: UpperShortImpl): UpperShortTagged[T] {.inline.} =
+  tag(val, UpperShort(tag))
+
+template getTag*[T](tagged: UpperShortTagged[T]): UpperShortImpl =
+  UpperShortImpl(splitTag(tagged))

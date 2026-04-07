@@ -1,31 +1,25 @@
-import ./[common, destructorimpl]
+import ./common
 
-type LowerBitsTagged*[T: PointerLike] = distinct pointer
-  ## tags the last 3 bits of the pointer in place
+type
+  LowerBitsImpl* = range[0..7]
+  LowerBits* = distinct LowerBitsImpl
+    ## tags the last 3 bits of the pointer in place
 
-template doTagImplLowerBits[T](x: T, tag: uint): LowerBitsTagged[T] =
-  # no range check
-  cast[LowerBitsTagged[T]](cast[uint](cast[pointer](x)) or tag)
+proc tag*(val: uint, tag: LowerBits): Tagged[uint, LowerBits] {.inline, nodestroy.} =
+  typeof(result)(val or tag.uint)
 
-template untagImplLowerBits[T](x: LowerBitsTagged[T]): T =
-  cast[T](cast[uint](x) and not 0b111.uint)
+proc untag*(tagged: Tagged[uint, LowerBits]): uint {.inline, nodestroy.} =
+  uint(tagged) and not 0b111'u
 
-template getTagImplLowerBits[T](x: LowerBitsTagged[T]): uint =
-  cast[uint](x) and 0b111
+proc splitTag*(tagged: Tagged[uint, LowerBits]): LowerBits {.inline, nodestroy.} =
+  typeof(result)(uint(tagged) and 0b111)
 
-implDestructors(LowerBitsTagged, doTagImplLowerBits, untagImplLowerBits, getTagImplLowerBits)
+implUintPointerTags(LowerBits)
 
-proc tagLowerBits*[T: PointerLike](p: T, tag: range[0..7]): LowerBitsTagged[T] {.inline.} =
-  doTagImplLowerBits(p, uint(tag))
+type LowerBitsTagged*[T] = Tagged[T, LowerBits]
 
-proc tag*[T](p: LowerBitsTagged[T]): range[0..7] {.inline.} =
-  cast[range[0..7]](getTagImplLowerBits(p))
+proc tagLowerBits*[T](val: T, tag: LowerBitsImpl): LowerBitsTagged[T] {.inline.} =
+  tag(val, LowerBits(tag))
 
-proc untag*[T](p: LowerBitsTagged[T]): T {.inline.} =
-  untagImplLowerBits(p)
-
-template isNil*[T](p: LowerBitsTagged[T]): bool =
-  p.untag.isNil
-
-template `[]`*[T](p: LowerBitsTagged[T]): untyped =
-  p.untag[]
+template getTag*[T](tagged: LowerBitsTagged[T]): LowerBitsImpl =
+  LowerBitsImpl(splitTag(tagged))
