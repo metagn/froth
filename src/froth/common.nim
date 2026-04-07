@@ -1,9 +1,8 @@
 import std/typetraits
 
-type
-  Tagged*[T, Tag] = object
-    # object rather than distinct for destructors to work (`=dup` disagrees on cyclic parameter)
-    raw*: T
+type Tagged*[T, Tag] = object
+  # object rather than distinct for destructors to work (`=dup` disagrees on cyclic parameter)
+  raw*: T
 
 # tag types need to implement tagInline/splitTagInline/untagInline as templates,
 # procs with inline + nodestroy infinitely recurse on orc for some reason
@@ -48,9 +47,12 @@ proc `=sink`*[T, Tag](dest: var Tagged[T, Tag], src: Tagged[T, Tag]) {.nodestroy
 
 proc `=dup`*[T, Tag](x: Tagged[T, Tag]): Tagged[T, Tag] {.nodestroy.} =
   mixin splitTagInline, untagInline, tagInline
-  let t = splitTagInline(x)
-  let p = `=dup`(untagInline(x))
-  result = tagInline(p, t)
+  when supportsCopyMem(T):
+    result = x
+  else:
+    let t = splitTagInline(x)
+    let p = `=dup`(untagInline(x))
+    result = tagInline(p, t)
 
 proc `=trace`*[T, Tag](x: var Tagged[T, Tag]; env: pointer) {.nodestroy.} =
   mixin splitTagInline, untagInline, tagInline
