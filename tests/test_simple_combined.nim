@@ -6,6 +6,7 @@ else:
 import froth
 
 # needs to be in the order: anybytes[lowerbits[T]]
+# probably could just be their own type
 
 test "basic combination":
   var x = new(int)

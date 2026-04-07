@@ -1,30 +1,30 @@
 import std/typetraits
 
-const isBytes = defined(gcRefc) and true
+const frothUseBytes* {.booldefine.} = defined(gcRefc) and (NimMajor, NimMinor) >= (2, 3)
   # breaks with forward types except in devel
-const isPointer = defined(gcRefc) and true
+const frothUsePointer* {.booldefine.} = defined(gcRefc)
 
 type RawBytes[T] {.used.} = array[sizeof(T), byte]
 
-when isBytes:
+when frothUseBytes:
   type Tagged*[T, Tag] = object
     rawBytes*: RawBytes[T]
 
-  template rawValue*[T, Tag](x: Tagged[T, Tag]): T =
+  template raw*[T, Tag](x: Tagged[T, Tag]): T =
     cast[T](x.rawBytes)
-  template rawValueMut*[T, Tag](x: var Tagged[T, Tag]): T =
+  template rawMut*[T, Tag](x: var Tagged[T, Tag]): T =
     cast[ptr T](addr x.rawBytes)[]
   template setRaw*[T, Tag](x: var Tagged[T, Tag], val: T) =
     x.rawBytes = cast[RawBytes[T]](val)
   template rawTagged*[T, Tag](x: T): Tagged[T, Tag] =
     Tagged[T, Tag](rawBytes: cast[RawBytes[T]](x))
-elif isPointer:
+elif frothUsePointer:
   type Tagged*[T, Tag] = object
     rawPointer*: pointer
 
-  template rawValue*[T, Tag](x: Tagged[T, Tag]): T =
+  template raw*[T, Tag](x: Tagged[T, Tag]): T =
     cast[T](x.rawPointer)
-  template rawValueMut*[T, Tag](x: var Tagged[T, Tag]): T =
+  template rawMut*[T, Tag](x: var Tagged[T, Tag]): T =
     cast[ptr T](addr x.rawPointer)[]
   template setRaw*[T, Tag](x: var Tagged[T, Tag], val: T) =
     x.rawPointer = cast[pointer](val)
@@ -33,31 +33,32 @@ elif isPointer:
 else:
   type Tagged*[T, Tag] = object
     # object rather than distinct for destructors to work (`=dup` disagrees on cyclic parameter)
-    raw*: T
+    rawValue*: T
+      # cant use this on refc, nim compiler always tries to run `unsureAsgnRef` on it
 
-  template rawValue*[T, Tag](x: Tagged[T, Tag]): T =
-    x.raw
-  template rawValueMut*[T, Tag](x: var Tagged[T, Tag]): T =
-    x.raw
+  template raw*[T, Tag](x: Tagged[T, Tag]): T =
+    x.rawValue
+  template rawMut*[T, Tag](x: var Tagged[T, Tag]): T =
+    x.rawValue
   template setRaw*[T, Tag](x: var Tagged[T, Tag], val: T) =
     when false:
-      cast[ptr RawBytes[T]](addr x.raw)[] = cast[RawBytes[T]](val)
+      cast[ptr RawBytes[T]](addr x.rawValue)[] = cast[RawBytes[T]](val)
     else:
-      x.raw = val
+      x.rawValue = val
   template rawTagged*[T, Tag](x: T): Tagged[T, Tag] =
-    Tagged[T, Tag](raw: x)
+    Tagged[T, Tag](rawValue: x)
 
 # tag types need to implement tagInline/splitTagInline/untagInline as templates,
 # procs with inline + nodestroy infinitely recurse on orc for some reason
 # XXX destructors do not call destructors for the tag, maybe document
 
 proc `=wasMoved`*[T, Tag](x: var Tagged[T, Tag]) {.nodestroy, inline.} =
-  when isBytes:
+  when frothUseBytes:
     x.rawBytes = default(RawBytes[T])#pointer(nil)
-  elif isPointer:
+  elif frothUsePointer:
     x.rawPointer = pointer(nil)
   else:
-    `=wasMoved`(x.raw)
+    `=wasMoved`(x.rawValue)
 
 when defined(nimAllowNonVarDestructor) and defined(gcDestructors):
   proc `=destroy`*[T, Tag](x: Tagged[T, Tag]) {.nodestroy.} =
@@ -72,7 +73,7 @@ else:
   proc `=destroy`*[T, Tag](x: var Tagged[T, Tag]) {.nodestroy.} =
     mixin untagInline
     x.setRaw untagInline(x)
-    `=destroy`(x.rawValueMut)
+    `=destroy`(x.rawMut)
     #cast[ptr T](addr x)[] = untag(x)
     #`=destroy`(cast[ptr T](x)[])
   {.pop.}
@@ -82,16 +83,16 @@ proc `=copy`*[T, Tag](dest: var Tagged[T, Tag], src: Tagged[T, Tag]) {.nodestroy
     dest = src
   else:
     let t = splitTagInline(src)
-    `=copy`(dest.rawValueMut, untagInline(src))
-    dest = tagInline(dest.rawValue, t)
+    `=copy`(dest.rawMut, untagInline(src))
+    dest = tagInline(dest.raw, t)
 
 proc `=sink`*[T, Tag](dest: var Tagged[T, Tag], src: Tagged[T, Tag]) {.nodestroy.} =
   when supportsCopyMem(T) or T is ref: # supportsMoveMem
     dest = src
   else:
     let t = splitTagInline(src)
-    `=sink`(dest.rawValueMut, untagInline(src))
-    dest = tagInline(dest.rawValue, t)
+    `=sink`(dest.rawMut, untagInline(src))
+    dest = tagInline(dest.raw, t)
 
 proc `=dup`*[T, Tag](x: Tagged[T, Tag]): Tagged[T, Tag] {.nodestroy.} =
   mixin splitTagInline, untagInline, tagInline
@@ -99,8 +100,8 @@ proc `=dup`*[T, Tag](x: Tagged[T, Tag]): Tagged[T, Tag] {.nodestroy.} =
     result = x
   elif defined(gcRefc):
     let t = splitTagInline(x)
-    `=copy`(result.rawValueMut, untagInline(x))
-    result = tagInline(result.rawValue, t)
+    `=copy`(result.rawMut, untagInline(x))
+    result = tagInline(result.raw, t)
   else:
     let t = splitTagInline(x)
     let p = `=dup`(untagInline(x))
@@ -108,21 +109,21 @@ proc `=dup`*[T, Tag](x: Tagged[T, Tag]): Tagged[T, Tag] {.nodestroy.} =
 
 proc `=trace`*[T, Tag](x: var Tagged[T, Tag]; env: pointer) {.nodestroy.} =
   mixin splitTagInline, untagInline, tagInline
-  when isBytes:
+  when frothUseBytes:
     let orig = x.rawBytes
     x.rawBytes = cast[RawBytes[T]](untagInline(x))
     `=trace`(cast[ptr T](addr x.rawBytes)[], env)
     x.rawBytes = orig
-  elif isPointer:
+  elif frothUsePointer:
     let orig = x.rawPointer
     x.rawPointer = cast[pointer](untagInline(x))
     `=trace`(cast[ptr T](addr x.rawPointer)[], env)
     x.rawPointer = orig
   else:
-    let orig = x.raw
-    x.raw = untagInline(x)
-    `=trace`(x.raw, env)
-    x.raw = orig
+    let orig = x.rawValue
+    x.rawValue = untagInline(x)
+    `=trace`(x.rawValue, env)
+    x.rawValue = orig
 
 when false:
   type SomeTag*[T] = concept
@@ -135,8 +136,7 @@ when false:
 
 type PointerLike* = auto
   ## anything that can be cast to `pointer`
-  ## not restricted for now so forward types can work
-  # ^ ???
+  ## not restricted for now since it can break with forwarded `ref` types
 
 template implUintPointerTags*(UintTag: untyped; splitTagVar = false) {.dirty.} =
   # XXX "tag`gensym0" crashes compiler due to being an ident in a symchoice, so dirty

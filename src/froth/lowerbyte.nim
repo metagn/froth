@@ -12,10 +12,10 @@ template tagInline*(val: uint, tag: LowerByte): Tagged[uint, LowerByte] =
   rawTagged[uint, LowerByte]((val shl 8) or tag.uint)
 
 template untagInline*(tagged: Tagged[uint, LowerByte]): uint =
-  cast[uint](ashr(cast[int](tagged.rawValue), 8))
+  cast[uint](ashr(cast[int](tagged.raw), 8))
 
 template splitTagInline*(tagged: Tagged[uint, LowerByte]): LowerByte =
-  LowerByte(tagged.rawValue and 0xFF)
+  LowerByte(tagged.raw and 0xFF)
 
 template splitTagMutInline*(tagged: var Tagged[uint, LowerByte]): var LowerByte =
   when cpuEndian == littleEndian:
