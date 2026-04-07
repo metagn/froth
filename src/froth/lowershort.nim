@@ -9,15 +9,15 @@ type
     ## tag bytes are addressable
 
 proc tag*(val: uint, tag: LowerShort): Tagged[uint, LowerShort] {.inline, nodestroy.} =
-  typeof(result)((val shl 16) or tag.uint)
+  Tagged[uint, LowerShort](raw: (val shl 16) or tag.uint)
 
 proc untag*(tagged: Tagged[uint, LowerShort]): uint {.inline, nodestroy.} =
-  cast[uint](ashr(cast[int](tagged), 16))
+  cast[uint](ashr(cast[int](tagged.raw), 16))
 
 proc splitTag*(tagged: Tagged[uint, LowerShort]): LowerShort {.inline, nodestroy.} =
-  typeof(result)(uint(tagged) and 0xFFFF)
+  LowerShort(tagged.raw and 0xFFFF)
 
-proc splitTag*(tagged: var Tagged[uint, LowerShort]): var LowerShort {.inline, nodestroy.} =
+proc splitTagMut*(tagged: var Tagged[uint, LowerShort]): var LowerShort {.inline, nodestroy.} =
   when cpuEndian == littleEndian:
     cast[ptr LowerShort](addr tagged)[]
   else:
@@ -32,3 +32,6 @@ proc tagLowerShort*[T](val: T, tag: LowerShortImpl): LowerShortTagged[T] {.inlin
 
 template getTag*[T](tagged: LowerShortTagged[T]): LowerShortImpl =
   LowerShortImpl(splitTag(tagged))
+
+template getTagMut*[T](tagged: LowerShortTagged[T]): LowerShortImpl =
+  LowerShortImpl(splitTagMut(tagged))

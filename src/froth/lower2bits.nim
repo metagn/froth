@@ -6,13 +6,13 @@ type
     ## tags the last 2 bits of the pointer in place
 
 proc tag*(val: uint, tag: Lower2Bits): Tagged[uint, Lower2Bits] {.inline, nodestroy.} =
-  typeof(result)(val or tag.uint)
+  Tagged[uint, Lower2Bits](raw: val or tag.uint)
 
 proc untag*(tagged: Tagged[uint, Lower2Bits]): uint {.inline, nodestroy.} =
-  uint(tagged) and not 0b11'u
+  tagged.raw and not 0b11'u
 
 proc splitTag*(tagged: Tagged[uint, Lower2Bits]): Lower2Bits {.inline, nodestroy.} =
-  typeof(result)(uint(tagged) and 0b11)
+  Lower2Bits(tagged.raw and 0b11)
 
 implUintPointerTags(Lower2Bits)
 

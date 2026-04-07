@@ -11,15 +11,15 @@ const remainingBits = sizeof(int) * 8 - 16
 const topShort = 0xFFFF.uint shl remainingBits
 
 proc tag*(val: uint, tag: UpperShort): Tagged[uint, UpperShort] {.inline, nodestroy.} =
-  typeof(result)((val and not topShort) or (tag.uint shl remainingBits))
+  Tagged[uint, UpperShort](raw: (val and not topShort) or (tag.uint shl remainingBits))
 
 proc untag*(tagged: Tagged[uint, UpperShort]): uint {.inline, nodestroy.} =
-  cast[uint](ashr(cast[int](tagged) shl 16, 16))
+  cast[uint](ashr(cast[int](tagged.raw) shl 16, 16))
 
 proc splitTag*(tagged: Tagged[uint, UpperShort]): UpperShort {.inline, nodestroy.} =
-  typeof(result)((uint(tagged) and topShort) shr remainingBits)
+  UpperShort((tagged.raw and topShort) shr remainingBits)
 
-proc splitTag*(tagged: var Tagged[uint, UpperShort]): var UpperShort {.inline, nodestroy.} =
+proc splitTagMut*(tagged: var Tagged[uint, UpperShort]): var UpperShort {.inline, nodestroy.} =
   when cpuEndian == littleEndian:
     cast[ptr array[4, UpperShort]](addr tagged)[3]
   else:
@@ -34,3 +34,6 @@ proc tagUpperShort*[T](val: T, tag: UpperShortImpl): UpperShortTagged[T] {.inlin
 
 template getTag*[T](tagged: UpperShortTagged[T]): UpperShortImpl =
   UpperShortImpl(splitTag(tagged))
+
+template getTagMut*[T](tagged: UpperShortTagged[T]): UpperShortImpl =
+  UpperShortImpl(splitTagMut(tagged))

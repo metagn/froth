@@ -8,13 +8,13 @@ type
 const remainingBits = sizeof(int) * 8 - 2
 
 proc tag*(val: uint, tag: Upper2Bits): Tagged[uint, Upper2Bits] {.inline, nodestroy.} =
-  typeof(result)((val shr 2) or (tag.uint shl remainingBits))
+  Tagged[uint, Upper2Bits](raw: (val shr 2) or (tag.uint shl remainingBits))
 
 proc untag*(tagged: Tagged[uint, Upper2Bits]): uint {.inline, nodestroy.} =
-  uint(tagged) shl 2
+  tagged.raw shl 2
 
 proc splitTag*(tagged: Tagged[uint, Upper2Bits]): Upper2Bits {.inline, nodestroy.} =
-  typeof(result)(uint(tagged) shr remainingBits)
+  Upper2Bits(tagged.raw shr remainingBits)
 
 implUintPointerTags(Upper2Bits)
 
