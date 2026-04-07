@@ -6,16 +6,17 @@ else:
 import froth
 
 # needs to be in the order: anybytes[lowerbits[T]]
+# probably could just be their own type
 
 test "basic combination":
   var x = new(int)
   x[] = 123
   var y = x.tagLowerBits(7).tagUpperByte(150)
-  check y.tag == 150
-  check y.untag.tag == 7
-  y.tag += 3
-  check y.tag == 153
-  check y.untag.tag == 7
+  check y.getTag == 150
+  check y.untag.getTag == 7
+  y.getTagMut += 3
+  check y.getTag == 153
+  check y.untag.getTag == 7
   check y.untag.untag[] == 123
   y.untag.untag[] += 2
   check y.untag.untag[] == 125
@@ -39,9 +40,9 @@ proc `$`(x: Owner): string =
       result.add("subject ")
       result.add(x.subject.untag.untag.name)
     result.add(" and first tag ")
-    result.add($x.subject.tag)
+    result.add($x.subject.getTag)
     result.add(" and second tag ")
-    result.add($x.subject.untag.tag)
+    result.add($x.subject.untag.getTag)
 proc `$`(x: Subject): string =
   result = "subject " & x.name & " with "
   if x.owner.isNil:
@@ -49,9 +50,9 @@ proc `$`(x: Subject): string =
   else:
     result.add("owner " & $x.owner.untag.untag.name)
   result.add(" and first tag ")
-  result.add($x.owner.tag)
+  result.add($x.owner.getTag)
   result.add(" and second tag ")
-  result.add($x.owner.untag.tag)
+  result.add($x.owner.untag.getTag)
 
 test "simple cycle with combination":
   var owner = Owner(name: "O")

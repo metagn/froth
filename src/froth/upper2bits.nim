@@ -1,33 +1,31 @@
-import ./[common, destructorimpl]
+import ./common
 
-type Upper2BitsTagged*[T: PointerLike] = distinct pointer
-  ## shifts pointer 2 bits to the right, shifts 2 bit tag 62 bits to the left
+type
+  Upper2BitsImpl* = range[0..3]
+  Upper2Bits* = distinct Upper2BitsImpl
+    ## shifts pointer 2 bits to the right, shifts 2 bit tag 62 bits to the left
 
 const remainingBits = sizeof(int) * 8 - 2
 
-template doTagImplUpper2Bits[T](x: T, tag: uint): Upper2BitsTagged[T] =
-  # no range check
-  cast[Upper2BitsTagged[T]]((cast[uint](cast[pointer](x)) shr 2) or (tag shl remainingBits))
+template withTagInline*(val: uint, tag: Upper2Bits): Tagged[uint, Upper2Bits] =
+  rawTagged[uint, Upper2Bits]((val shr 2) or (tag.uint shl remainingBits))
 
-template untagImplUpper2Bits[T](x: Upper2BitsTagged[T]): T =
-  cast[T](cast[uint](x) shl 2)
+template untagInline*(tagged: Tagged[uint, Upper2Bits]): uint =
+  tagged.raw shl 2
 
-template getTagImplUpper2Bits[T](x: Upper2BitsTagged[T]): uint =
-  cast[uint](x) shr remainingBits
+template splitTagInline*(tagged: Tagged[uint, Upper2Bits]): Upper2Bits =
+  Upper2Bits(tagged.raw shr remainingBits)
 
-implDestructors(Upper2BitsTagged, doTagImplUpper2Bits, untagImplUpper2Bits, getTagImplUpper2Bits)
+proc withTag*(val: uint, tag: Upper2Bits): Tagged[uint, Upper2Bits] {.inline.} = withTagInline(val, tag)
+proc untag*(tagged: Tagged[uint, Upper2Bits]): uint {.inline.} = untagInline(tagged)
+proc splitTag*(tagged: Tagged[uint, Upper2Bits]): Upper2Bits {.inline.} = splitTagInline(tagged)
 
-proc tagUpper2Bits*[T: PointerLike](p: T, tag: range[0..3]): Upper2BitsTagged[T] {.inline.} =
-  doTagImplUpper2Bits(p, uint(tag))
+implUintPointerTags(Upper2Bits)
 
-proc tag*[T](p: Upper2BitsTagged[T]): range[0..3] {.inline.} =
-  cast[range[0..3]](getTagImplUpper2Bits(p))
+type Upper2BitsTagged*[T] = Tagged[T, Upper2Bits]
 
-proc untag*[T](p: Upper2BitsTagged[T]): T {.inline.} =
-  untagImplUpper2Bits(p)
+proc tagUpper2Bits*[T](val: T, tag: Upper2BitsImpl): Upper2BitsTagged[T] {.inline.} =
+  withTag(val, Upper2Bits(tag))
 
-template isNil*[T](p: Upper2BitsTagged[T]): bool =
-  p.untag.isNil
-
-template `[]`*[T](p: Upper2BitsTagged[T]): untyped =
-  p.untag[]
+template getTag*[T](tagged: Upper2BitsTagged[T]): Upper2BitsImpl =
+  Upper2BitsImpl(splitTag(tagged))
