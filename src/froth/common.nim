@@ -51,16 +51,22 @@ proc `=dup`*[T, Tag](x: Tagged[T, Tag]): Tagged[T, Tag] {.nodestroy.} =
   result = tag(p, t)
 
 proc `=trace`*[T, Tag](x: var Tagged[T, Tag]; env: pointer) {.nodestroy.} =
-  mixin untag
+  mixin splitTag, untag, tag
   when false:
     let orig = cast[pointer](x)
     x = cast[Tagged[T, Tag]](untagImpl(x))
     `=trace`(cast[ptr T](addr x)[], env)
     x = cast[Tagged[T, Tag]](orig)
-  let orig = x.raw
-  x.raw = untag(x)
-  `=trace`(x.raw, env)
-  x.raw = orig
+  elif true:
+    let orig = x.raw
+    x.raw = untag(x)
+    `=trace`(x.raw, env)
+    x.raw = orig
+  elif false:
+    let t = splitTag(x)
+    x.raw = untag(x)
+    `=trace`(x.raw, env)
+    x = tag(x.raw, t)
 
 when false:
   type SomeTag*[T] = concept

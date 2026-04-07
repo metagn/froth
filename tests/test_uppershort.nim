@@ -21,7 +21,7 @@ test "addressable tag":
   x[] = 123
   var tagged = tagUpperShort(x, 5)
   check tagged.getTag == 5
-  tagged.getTag += 2
+  tagged.getTagMut += 2
   check tagged.getTag == 7
 
 type
