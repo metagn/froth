@@ -10,7 +10,7 @@ type
 const remainingBits = sizeof(int) * 8 - 8
 const topByte = 0xFF.uint shl remainingBits
 
-template tagInline*(val: uint, tag: UpperByte): Tagged[uint, UpperByte] =
+template withTagInline*(val: uint, tag: UpperByte): Tagged[uint, UpperByte] =
   rawTagged[uint, UpperByte]((val and not topByte) or (tag.uint shl remainingBits))
 
 template untagInline*(tagged: Tagged[uint, UpperByte]): uint =
@@ -25,7 +25,7 @@ template splitTagMutInline*(tagged: var Tagged[uint, UpperByte]): var UpperByte 
   else:
     cast[ptr UpperByte](addr tagged)[]
 
-proc tag*(val: uint, tag: UpperByte): Tagged[uint, UpperByte] {.inline.} = tagInline(val, tag)
+proc withTag*(val: uint, tag: UpperByte): Tagged[uint, UpperByte] {.inline.} = withTagInline(val, tag)
 proc untag*(tagged: Tagged[uint, UpperByte]): uint {.inline.} = untagInline(tagged)
 proc splitTag*(tagged: Tagged[uint, UpperByte]): UpperByte {.inline.} = splitTagInline(tagged)
 proc splitTagMut*(tagged: var Tagged[uint, UpperByte]): var UpperByte {.inline.} = splitTagMutInline(tagged)
@@ -35,7 +35,7 @@ implUintPointerTags(UpperByte, splitTagVar = true)
 type UpperByteTagged*[T] = Tagged[T, UpperByte]
 
 proc tagUpperByte*[T](val: T, tag: UpperByteImpl): UpperByteTagged[T] {.inline.} =
-  tag(val, UpperByte(tag))
+  withTag(val, UpperByte(tag))
 
 template getTag*[T](tagged: UpperByteTagged[T]): UpperByteImpl =
   UpperByteImpl(splitTag(tagged))

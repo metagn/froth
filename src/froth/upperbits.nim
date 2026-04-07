@@ -7,7 +7,7 @@ type
 
 const remainingBits = sizeof(int) * 8 - 3
 
-template tagInline*(val: uint, tag: UpperBits): Tagged[uint, UpperBits] =
+template withTagInline*(val: uint, tag: UpperBits): Tagged[uint, UpperBits] =
   rawTagged[uint, UpperBits]((val shr 3) or (tag.uint shl remainingBits))
 
 template untagInline*(tagged: Tagged[uint, UpperBits]): uint =
@@ -16,7 +16,7 @@ template untagInline*(tagged: Tagged[uint, UpperBits]): uint =
 template splitTagInline*(tagged: Tagged[uint, UpperBits]): UpperBits =
   UpperBits(tagged.raw shr remainingBits)
 
-proc tag*(val: uint, tag: UpperBits): Tagged[uint, UpperBits] {.inline.} = tagInline(val, tag)
+proc withTag*(val: uint, tag: UpperBits): Tagged[uint, UpperBits] {.inline.} = withTagInline(val, tag)
 proc untag*(tagged: Tagged[uint, UpperBits]): uint {.inline.} = untagInline(tagged)
 proc splitTag*(tagged: Tagged[uint, UpperBits]): UpperBits {.inline.} = splitTagInline(tagged)
 
@@ -25,7 +25,7 @@ implUintPointerTags(UpperBits)
 type UpperBitsTagged*[T] = Tagged[T, UpperBits]
 
 proc tagUpperBits*[T](val: T, tag: UpperBitsImpl): UpperBitsTagged[T] {.inline.} =
-  tag(val, UpperBits(tag))
+  withTag(val, UpperBits(tag))
 
 template getTag*[T](tagged: UpperBitsTagged[T]): UpperBitsImpl =
   UpperBitsImpl(splitTag(tagged))

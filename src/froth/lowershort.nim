@@ -8,7 +8,7 @@ type
     ## 
     ## tag bytes are addressable
 
-template tagInline*(val: uint, tag: LowerShort): Tagged[uint, LowerShort] =
+template withTagInline*(val: uint, tag: LowerShort): Tagged[uint, LowerShort] =
   rawTagged[uint, LowerShort]((val shl 16) or tag.uint)
 
 template untagInline*(tagged: Tagged[uint, LowerShort]): uint =
@@ -23,7 +23,7 @@ template splitTagMutInline*(tagged: var Tagged[uint, LowerShort]): var LowerShor
   else:
     cast[ptr array[4, LowerShort]](addr tagged)[3]
 
-proc tag*(val: uint, tag: LowerShort): Tagged[uint, LowerShort] {.inline.} = tagInline(val, tag)
+proc withTag*(val: uint, tag: LowerShort): Tagged[uint, LowerShort] {.inline.} = withTagInline(val, tag)
 proc untag*(tagged: Tagged[uint, LowerShort]): uint {.inline.} = untagInline(tagged)
 proc splitTag*(tagged: Tagged[uint, LowerShort]): LowerShort {.inline.} = splitTagInline(tagged)
 proc splitTagMut*(tagged: var Tagged[uint, LowerShort]): var LowerShort {.inline.} = splitTagMutInline(tagged)
@@ -33,7 +33,7 @@ implUintPointerTags(LowerShort, splitTagVar = true)
 type LowerShortTagged*[T] = Tagged[T, LowerShort]
 
 proc tagLowerShort*[T](val: T, tag: LowerShortImpl): LowerShortTagged[T] {.inline.} =
-  tag(val, LowerShort(tag))
+  withTag(val, LowerShort(tag))
 
 template getTag*[T](tagged: LowerShortTagged[T]): LowerShortImpl =
   LowerShortImpl(splitTag(tagged))

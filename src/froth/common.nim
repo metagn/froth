@@ -48,13 +48,13 @@ else:
   template rawTagged*[T, Tag](x: T): Tagged[T, Tag] =
     Tagged[T, Tag](rawValue: x)
 
-# tag types need to implement tagInline/splitTagInline/untagInline as templates,
+# tag types need to implement withTagInline/splitTagInline/untagInline as templates,
 # procs with inline + nodestroy infinitely recurse on orc for some reason
 # XXX destructors do not call destructors for the tag, maybe document
 
 proc `=wasMoved`*[T, Tag](x: var Tagged[T, Tag]) {.nodestroy, inline.} =
   when frothUseBytes:
-    x.rawBytes = default(RawBytes[T])#pointer(nil)
+    x.rawBytes = default(RawBytes[T])
   elif frothUsePointer:
     x.rawPointer = pointer(nil)
   else:
@@ -74,8 +74,6 @@ else:
     mixin untagInline
     x.setRaw untagInline(x)
     `=destroy`(x.rawMut)
-    #cast[ptr T](addr x)[] = untag(x)
-    #`=destroy`(cast[ptr T](x)[])
   {.pop.}
 
 proc `=copy`*[T, Tag](dest: var Tagged[T, Tag], src: Tagged[T, Tag]) {.nodestroy.} =
@@ -84,7 +82,7 @@ proc `=copy`*[T, Tag](dest: var Tagged[T, Tag], src: Tagged[T, Tag]) {.nodestroy
   else:
     let t = splitTagInline(src)
     `=copy`(dest.rawMut, untagInline(src))
-    dest = tagInline(dest.raw, t)
+    dest = withTagInline(dest.raw, t)
 
 proc `=sink`*[T, Tag](dest: var Tagged[T, Tag], src: Tagged[T, Tag]) {.nodestroy.} =
   when supportsCopyMem(T) or T is ref: # supportsMoveMem
@@ -92,23 +90,19 @@ proc `=sink`*[T, Tag](dest: var Tagged[T, Tag], src: Tagged[T, Tag]) {.nodestroy
   else:
     let t = splitTagInline(src)
     `=sink`(dest.rawMut, untagInline(src))
-    dest = tagInline(dest.raw, t)
+    dest = withTagInline(dest.raw, t)
 
 proc `=dup`*[T, Tag](x: Tagged[T, Tag]): Tagged[T, Tag] {.nodestroy.} =
-  mixin splitTagInline, untagInline, tagInline
+  mixin splitTagInline, untagInline, withTagInline
   when supportsCopyMem(T):
     result = x
-  elif defined(gcRefc):
-    let t = splitTagInline(x)
-    `=copy`(result.rawMut, untagInline(x))
-    result = tagInline(result.raw, t)
   else:
     let t = splitTagInline(x)
     let p = `=dup`(untagInline(x))
-    result = tagInline(p, t)
+    result = withTagInline(p, t)
 
 proc `=trace`*[T, Tag](x: var Tagged[T, Tag]; env: pointer) {.nodestroy.} =
-  mixin splitTagInline, untagInline, tagInline
+  mixin splitTagInline, untagInline, withTagInline
   when frothUseBytes:
     let orig = x.rawBytes
     x.rawBytes = cast[RawBytes[T]](untagInline(x))
@@ -125,12 +119,13 @@ proc `=trace`*[T, Tag](x: var Tagged[T, Tag]; env: pointer) {.nodestroy.} =
     `=trace`(x.rawValue, env)
     x.rawValue = orig
 
+# XXX in place procs, setTag and removeTag
+
 when false:
   type SomeTag*[T] = concept
     # does not seem to work due to nim bug, saying cannot instantiate Tagged
     # or my version is old
-    proc tag(val: T, tag: Self): Tagged[uint, Self]
-      # XXX maybe rename to withTag or something, and in place setTag
+    proc withTag(val: T, tag: Self): Tagged[uint, Self]
     proc untag(tagged: Tagged[T, Self]): T
     proc splitTag(tagged: Tagged[T, Self]): Self
 
@@ -139,10 +134,11 @@ type PointerLike* = auto
   ## not restricted for now since it can break with forwarded `ref` types
 
 template implUintPointerTags*(UintTag: untyped; splitTagVar = false) {.dirty.} =
-  # XXX "tag`gensym0" crashes compiler due to being an ident in a symchoice, so dirty
-  mixin tagInline, untagInline, splitTagInline
-  template tagInline*[T: PointerLike](val: T, t: UintTag): Tagged[T, UintTag] =
-    cast[Tagged[T, UintTag]](tagInline(cast[uint](val), t))
+  # both proc and proc param named `tag` crashed the compiler due to being an ident in a symchoice
+  # dirty prevents crash just in case
+  mixin withTagInline, untagInline, splitTagInline
+  template withTagInline*[T: PointerLike](val: T, t: UintTag): Tagged[T, UintTag] =
+    cast[Tagged[T, UintTag]](withTagInline(cast[uint](val), t))
   template untagInline*[T: PointerLike](tagged: Tagged[T, UintTag]): T =
     cast[T](untagInline(cast[Tagged[uint, UintTag]](tagged)))
   template splitTagInline*[T: PointerLike](tagged: Tagged[T, UintTag]): UintTag =
@@ -150,8 +146,8 @@ template implUintPointerTags*(UintTag: untyped; splitTagVar = false) {.dirty.} =
   when splitTagVar:
     template splitTagMutInline*[T: PointerLike](tagged: var Tagged[T, UintTag]): var UintTag =
       splitTagMutInline(cast[ptr Tagged[uint, UintTag]](addr tagged)[])
-  proc tag*[T: PointerLike](val: T, t: UintTag): Tagged[T, UintTag] {.inline.} =
-    tagInline(val, t)
+  proc withTag*[T: PointerLike](val: T, t: UintTag): Tagged[T, UintTag] {.inline.} =
+    withTagInline(val, t)
   proc untag*[T: PointerLike](tagged: Tagged[T, UintTag]): T {.inline.} =
     untagInline(tagged)
   proc splitTag*[T: PointerLike](tagged: Tagged[T, UintTag]): UintTag {.inline.} =
