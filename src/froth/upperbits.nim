@@ -8,7 +8,7 @@ type
 const remainingBits = sizeof(int) * 8 - 3
 
 template tagInline*(val: uint, tag: UpperBits): Tagged[uint, UpperBits] =
-  Tagged[uint, UpperBits](raw: (val shr 3) or (tag.uint shl remainingBits))
+  rawTagged[uint, UpperBits]((val shr 3) or (tag.uint shl remainingBits))
 
 template untagInline*(tagged: Tagged[uint, UpperBits]): uint =
   tagged.raw shl 3

@@ -11,7 +11,7 @@ const remainingBits = sizeof(int) * 8 - 16
 const topShort = 0xFFFF.uint shl remainingBits
 
 template tagInline*(val: uint, tag: UpperShort): Tagged[uint, UpperShort] =
-  Tagged[uint, UpperShort](raw: (val and not topShort) or (tag.uint shl remainingBits))
+  rawTagged[uint, UpperShort]((val and not topShort) or (tag.uint shl remainingBits))
 
 template untagInline*(tagged: Tagged[uint, UpperShort]): uint =
   cast[uint](ashr(cast[int](tagged.raw) shl 16, 16))

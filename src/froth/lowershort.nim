@@ -9,7 +9,7 @@ type
     ## tag bytes are addressable
 
 template tagInline*(val: uint, tag: LowerShort): Tagged[uint, LowerShort] =
-  Tagged[uint, LowerShort](raw: (val shl 16) or tag.uint)
+  rawTagged[uint, LowerShort]((val shl 16) or tag.uint)
 
 template untagInline*(tagged: Tagged[uint, LowerShort]): uint =
   cast[uint](ashr(cast[int](tagged.raw), 16))

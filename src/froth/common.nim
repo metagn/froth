@@ -4,6 +4,9 @@ type Tagged*[T, Tag] = object
   # object rather than distinct for destructors to work (`=dup` disagrees on cyclic parameter)
   raw*: T
 
+template rawTagged*[T, Tag](x: T): Tagged[T, Tag] =
+  Tagged[T, Tag](raw: x)
+
 # tag types need to implement tagInline/splitTagInline/untagInline as templates,
 # procs with inline + nodestroy infinitely recurse on orc for some reason
 # XXX destructors do not call destructors for the tag, maybe document

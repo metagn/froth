@@ -6,7 +6,7 @@ type
     ## tags the last 2 bits of the pointer in place
 
 template tagInline*(val: uint, tag: Lower2Bits): Tagged[uint, Lower2Bits] =
-  Tagged[uint, Lower2Bits](raw: val or tag.uint)
+  rawTagged[uint, Lower2Bits](val or tag.uint)
 
 template untagInline*(tagged: Tagged[uint, Lower2Bits]): uint =
   tagged.raw and not 0b11'u
