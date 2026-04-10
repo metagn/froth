@@ -22,8 +22,14 @@ proc nilValue*(): Value = initValue(Nil)
 proc toValue*(b: bool): Value = initValue(if b: True else: False)
 proc toValue*(i: int): Value =
   result = initIntValue(Int, i)
-proc toValue*(s: seq[Value]): Value =
-  result = initSeqValue(Seq, SeqImpl(children: s))
+when defined(gcRefc):
+  # object constructor calls genericSeqAssign otherwise
+  proc toValue*(s: sink seq[Value]): Value =
+    result = initSeqValue(Seq, SeqImpl(children: s))
+else:
+  # also works with sink but not tested to not rely on it
+  proc toValue*(s: seq[Value]): Value =
+    result = initSeqValue(Seq, SeqImpl(children: s))
 
 proc getInt*(val: Value): int =
   assert val.kind == Int

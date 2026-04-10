@@ -38,8 +38,9 @@ template implementCondensateDestructorsImpl(T: untyped) {.dirty.} =
             var tagVal = field
             `=destroy`(tagVal)
         elif fieldKind == CondensateValue:
-          cast[ptr typ](addr x)[] = field
-          `=destroy`(cast[ptr typ](addr x)[])
+          when not supportsCopyMem(typ):
+            x = cast[T](field)
+            `=destroy`(cast[ptr typ](addr x)[])
       condensateFields(x, destroyIter)
     {.pop.}
 
@@ -85,7 +86,8 @@ template implementCondensateDestructorsImpl(T: untyped) {.dirty.} =
         var t = field
         `=trace`(t, env)
       elif fieldKind == CondensateValue:
-        cast[ptr typ](addr x)[] = field
+        x = cast[T](field)
+        #cast[ptr typ](addr x)[] = field
         `=trace`(cast[ptr typ](addr x)[], env)
     condensateFields(orig, traceIter)
     x = orig
