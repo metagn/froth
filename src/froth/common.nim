@@ -1,7 +1,7 @@
 import std/typetraits
 
-const frothUseBytes* {.booldefine.} = defined(gcRefc) and (NimMajor, NimMinor) >= (2, 3)
-  # breaks with forward types except in devel
+const frothUseBytes* {.booldefine.} = defined(gcRefc) and false # (NimMajor, NimMinor) >= (2, 3)
+  # breaks with forward types
 const frothUsePointer* {.booldefine.} = defined(gcRefc)
 
 type RawBytes[T] {.used.} = array[sizeof(T), byte]
