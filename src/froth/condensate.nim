@@ -3,6 +3,93 @@ import common, std/[macros, strutils, typetraits]
 type CondensateFieldKind* = enum
   CondensateTag, CondensateValue
 
+template implementCondensateDestructorsImpl(T: untyped) {.dirty.} =
+  bind distinctBase, supportsCopyMem
+  proc `=wasMoved`*(x: var T) {.nodestroy, inline.}
+  when defined(nimAllowNonVarDestructor) and defined(gcDestructors):
+    proc `=destroy`*(x: T) {.nodestroy.}
+  else:
+    {.push warning[Deprecated]: off.}
+    proc `=destroy`*(x: var T) {.nodestroy.}
+    {.pop.}
+  proc `=copy`*(dest: var T, src: T) {.nodestroy.}
+  proc `=sink`*(dest: var T, src: T) {.nodestroy.}
+  proc `=dup`*(x: T): T {.nodestroy.}
+  proc `=trace`*(x: var T; env: pointer) {.nodestroy.}
+
+  proc `=wasMoved`*(x: var T) {.nodestroy, inline.} =
+    `=wasMoved`(x.inner)
+
+  when defined(nimAllowNonVarDestructor) and defined(gcDestructors):
+    proc `=destroy`*(x: T) {.nodestroy.} =
+      template destroyIter(field, typ, _, _) =
+        when not supportsCopyMem(typ):
+          # no generic non-var destructor
+          {.cast(raises: []).}:
+            `=destroy`(field)
+      condensateFields(x, destroyIter)
+  else:
+    {.push warning[Deprecated]: off.}
+    proc `=destroy`*(x: var T) {.nodestroy.} =
+      template destroyIter(field, typ, fieldKind, _) =
+        when fieldKind == CondensateTag:
+          when not supportsCopyMem(typ):
+            # probably wont be effective anyway
+            var tagVal = field
+            `=destroy`(tagVal)
+        elif fieldKind == CondensateValue:
+          cast[ptr typ](addr x)[] = field
+          `=destroy`(cast[ptr typ](addr x)[])
+      condensateFields(x, destroyIter)
+    {.pop.}
+
+  proc `=copy`*(dest: var T, src: T) {.nodestroy.} =
+    template copyIter(field, typ, fieldKind, _) {.dirty.} =
+      when fieldKind == CondensateTag:
+        let t {.inject.} = field
+        dest = initCondensate(t)
+      elif fieldKind == CondensateValue:
+        var val {.inject.}: typ
+        when false: # https://github.com/nim-lang/Nim/issues/25730
+          `=copy`(val, field)
+        else:
+          val = `=dup`(field)
+        dest = initCondensate(t, cast[condensateBase(T)](val))
+    condensateFields(src, copyIter)
+
+  proc `=sink`*(dest: var T, src: T) #[{.nodestroy.}]# =
+    template sinkIter(field, typ, fieldKind, _) {.dirty.} =
+      when fieldKind == CondensateTag:
+        let t {.inject.} = field
+        dest = initCondensate(t)
+      elif fieldKind == CondensateValue:
+        var val {.inject.}: typ
+        `=sink`(val, field)
+        dest = initCondensate(t, cast[condensateBase(T)](val))
+    condensateFields(src, sinkIter)
+
+  proc `=dup`*(x: T): T {.nodestroy.} =
+    template dupIter(field, typ, fieldKind, _) {.dirty.} =
+      when fieldKind == CondensateTag:
+        let t {.inject.} = field
+        result = initCondensate(t)
+      elif fieldKind == CondensateValue:
+        let val {.inject.} = `=dup`(field)
+        result = initCondensate(t, cast[condensateBase(T)](val))
+    condensateFields(x, dupIter)
+
+  proc `=trace`*(x: var T; env: pointer) {.nodestroy.} =
+    let orig = x
+    template traceIter(field, typ, fieldKind, _) {.dirty.} =
+      when fieldKind == CondensateTag:
+        var t = field
+        `=trace`(t, env)
+      elif fieldKind == CondensateValue:
+        cast[ptr typ](addr x)[] = field
+        `=trace`(cast[ptr typ](addr x)[], env)
+    condensateFields(orig, traceIter)
+    x = orig
+
 proc condensateImpl(node: NimNode): tuple[typeSection, stmts: NimNode] =
   result.typeSection = newNimNode(nnkTypeSection, node)
   result.stmts = newNimNode(nnkStmtList, node)
@@ -68,6 +155,7 @@ proc condensateImpl(node: NimNode): tuple[typeSection, stmts: NimNode] =
     name = if isTagExported: newTree(nnkPostfix, ident"*", ident"condensateTag") else: ident"condensateTag",
     params = [if tagConvType.isNil: tagType else: tagConvType,
       newIdentDefs(fieldsObjName, typeName)],
+    pragmas = newTree(nnkPragma, ident"used"),
     body = newCall(tagName, fieldsObjName)
   )
   result.stmts.add newProc(
@@ -75,8 +163,11 @@ proc condensateImpl(node: NimNode): tuple[typeSection, stmts: NimNode] =
     name = if isTagExported: newTree(nnkPostfix, ident"*", ident"condensateBase") else: ident"condensateBase",
     params = [ident"untyped",
       newIdentDefs(ident"_", newTree(nnkBracketExpr, ident"typedesc", typeName))],
+    pragmas = newTree(nnkPragma, ident"used"),
     body = tagBaseType
   )
+
+  var convenienceProcs: seq[NimNode] = @[]
 
   # other fields:
   var branches: seq[tuple[originalBranch: NimNode, name: string, typ: NimNode]]
@@ -131,18 +222,22 @@ proc condensateImpl(node: NimNode): tuple[typeSection, stmts: NimNode] =
     if isBranchExported: initName = newTree(nnkPostfix, ident"*", initName)
     let tagArgName = ident repr genSym(nskParam, tagNameStr)
     let branchArgName = ident repr genSym(nskParam, branchNameStr)
-    result.stmts.add newProc(
-      procType = nnkTemplateDef,
+    let copiedName = ident repr genSym(nskLet, branchNameStr & "_copied")
+    convenienceProcs.add newProc(
+      procType = nnkProcDef,
       name = initName,
       params = [typeName,
         newTree(nnkIdentDefs, tagArgName, if tagConvType.isNil: tagType else: tagConvType, tagDefault),
-        newTree(nnkIdentDefs, branchArgName, branchType, branchDefault)],
-      #pragmas = newTree(nnkPragma, ident"inline"),
-      body = newTree(nnkObjConstr, typeName,
-        newTree(nnkExprColonExpr, realField,
-          newCall(ident"withTagInline",
-            newTree(nnkCast, tagBaseType, branchArgName),
-            if tagConvType.isNil: tagArgName else: newCall(tagType, tagArgName))))
+        newTree(nnkIdentDefs, branchArgName, newCall(ident"sink", branchType), branchDefault)],
+      pragmas = newTree(nnkPragma, ident"inline", ident"nodestroy", ident"used"),
+      body = newStmtList(
+        newTree(nnkLetSection,
+          newTree(nnkIdentDefs, copiedName, newEmptyNode(), newCall(ident"=dup", branchArgName))),
+        newTree(nnkObjConstr, typeName,
+          newTree(nnkExprColonExpr, realField,
+            newCall(ident"withTagInline",
+              newTree(nnkCast, tagBaseType, copiedName),
+              if tagConvType.isNil: tagArgName else: newCall(tagType, tagArgName)))))
     )
     branches.add (branch, branchNameStr, branchType)
   # general constructor for empty branches:
@@ -151,25 +246,26 @@ proc condensateImpl(node: NimNode): tuple[typeSection, stmts: NimNode] =
     let baseArgName = ident repr genSym(nskParam, "base")
     let constructorName = ident("init" & $typeName)
     let constructor = newProc(
-      procType = nnkTemplateDef,
+      procType = nnkProcDef,
       name = if typeIsExported: newTree(nnkPostfix, ident"*", constructorName) else: constructorName,
       params = [typeName,
         newTree(nnkIdentDefs, tagArgName, if tagConvType.isNil: tagType else: tagConvType, tagDefault),
         newTree(nnkIdentDefs, baseArgName, tagBaseType, newCall(ident"default", tagBaseType))],
-      #pragmas = newTree(nnkPragma, ident"inline"),
+      pragmas = newTree(nnkPragma, ident"inline", ident"used"),
       body = newTree(nnkObjConstr, typeName,
         newTree(nnkExprColonExpr, realField,
           newCall(ident"withTagInline",
             baseArgName,
             if tagConvType.isNil: tagArgName else: newCall(tagType, tagArgName))))
     )
-    result.stmts.add constructor
+    convenienceProcs.add constructor
     let condensateConstructor = newProc(
       procType = nnkTemplateDef,
       name = if typeIsExported: newTree(nnkPostfix, ident"*", ident"initCondensate") else: ident"initCondensate",
       params = [typeName,
         newTree(nnkIdentDefs, tagArgName, if tagConvType.isNil: tagType else: tagConvType, tagDefault),
         newTree(nnkIdentDefs, baseArgName, tagBaseType, newCall(ident"default", tagBaseType))],
+      pragmas = newTree(nnkPragma, ident"used"),
       body = newTree(nnkObjConstr, typeName,
         newTree(nnkExprColonExpr, realField,
           newCall(ident"withTagInline",
@@ -199,10 +295,12 @@ proc condensateImpl(node: NimNode): tuple[typeSection, stmts: NimNode] =
     if b.typ.isNil:
       newBranch.add newTree(nnkDiscardStmt, newEmptyNode())
     else:
-      let field = ident repr genSym(nskLet, "condensateFields" & b.name)
+      let field = ident repr genSym(nskLet, "condensateFields_" & b.name)
       newBranch.add newStmtList(
         newTree(nnkLetSection,
-          newTree(nnkIdentDefs, field, newEmptyNode(),
+          newTree(nnkIdentDefs,
+            newTree(nnkPragmaExpr, field, newTree(nnkPragma, ident"used")),
+            newEmptyNode(),
             newCall(ident b.name, fieldsObjName))),
         newCall(fieldsIterName,
           field,
@@ -217,9 +315,11 @@ proc condensateImpl(node: NimNode): tuple[typeSection, stmts: NimNode] =
     params = [ident"untyped",
       newIdentDefs(fieldsObjName, typeName, newEmptyNode()),
       newIdentDefs(fieldsIterName, ident"untyped", newEmptyNode())],
+    pragmas = newTree(nnkPragma, ident"used"),
     body = iterBody
   )
-  discard
+  result.stmts.add getAst(implementCondensateDestructorsImpl(typeName))
+  for p in convenienceProcs: result.stmts.add p
 
 macro condensate*(node: untyped): untyped =
   let res = condensateImpl(node)
@@ -245,87 +345,6 @@ macro condensate*(node: untyped): untyped =
     result = newStmtList(res.typeSection)
     for st in res.stmts: result.add st
   #echo result.repr
-
-template implementCondensateDestructorsImpl*(T: untyped) {.dirty.} =
-  bind distinctBase, supportsCopyMem
-  proc `=wasMoved`*(x: var T) {.nodestroy, inline.}
-  when defined(nimAllowNonVarDestructor) and defined(gcDestructors):
-    proc `=destroy`*(x: T) {.nodestroy.}
-  else:
-    {.push warning[Deprecated]: off.}
-    proc `=destroy`*(x: var T) {.nodestroy.}
-    {.pop.}
-  proc `=copy`*(dest: var T, src: T) {.nodestroy.}
-  proc `=sink`*(dest: var T, src: T) {.nodestroy.}
-  proc `=dup`*(x: T): T {.nodestroy.}
-  proc `=trace`*(x: var T; env: pointer) {.nodestroy.}
-
-  proc `=wasMoved`*(x: var T) {.nodestroy, inline.} =
-    `=wasMoved`(x.inner)
-
-  when defined(nimAllowNonVarDestructor) and defined(gcDestructors):
-    proc `=destroy`*(x: T) {.nodestroy.} =
-      template destroyIter(field, typ, _, _) =
-        when not supportsCopyMem(typ):
-          # no generic non-var destructor
-          {.cast(raises: []).}:
-            `=destroy`(field)
-      condensateFields(x, destroyIter)
-  else:
-    {.push warning[Deprecated]: off.}
-    proc `=destroy`*(x: var T) {.nodestroy.} =
-      template destroyIter(field, typ, fieldKind, _) =
-        when fieldKind == CondensateTag:
-          when not supportsCopyMem(typ):
-            # probably wont be effective anyway
-            var tagVal = field
-            `=destroy`(tagVal)
-        elif fieldKind == CondensateValue:
-          cast[ptr typ](addr x)[] = field
-          `=destroy`(cast[ptr typ](addr x)[])
-      condensateFields(x, destroyIter)
-    {.pop.}
-
-  proc `=copy`*(dest: var T, src: T) {.nodestroy.} =
-    template copyIter(field, typ, fieldKind, _) {.dirty.} =
-      when fieldKind == CondensateTag:
-        let t {.inject.} = field
-      elif fieldKind == CondensateValue:
-        var val {.inject.}: typ
-        `=copy`(val, field)
-        dest = initCondensate(t, cast[condensateBase(T)](val))
-    condensateFields(src, copyIter)
-
-  proc `=sink`*(dest: var T, src: T) {.nodestroy.} =
-    template sinkIter(field, typ, fieldKind, _) {.dirty.} =
-      when fieldKind == CondensateTag:
-        let t {.inject.} = field
-      elif fieldKind == CondensateValue:
-        var val {.inject.}: typ
-        `=sink`(val, field)
-        dest = initCondensate(t, cast[condensateBase(T)](val))
-    condensateFields(src, sinkIter)
-
-  proc `=dup`*(x: T): T {.nodestroy.} =
-    template dupIter(field, typ, fieldKind, _) {.dirty.} =
-      when fieldKind == CondensateTag:
-        let t {.inject.} = field
-      elif fieldKind == CondensateValue:
-        let val {.inject.} = `=dup`(field)
-        result = initCondensate(t, cast[condensateBase(T)](val))
-    condensateFields(x, dupIter)
-
-  proc `=trace`*(x: var T; env: pointer) {.nodestroy.} =
-    let orig = x
-    template traceIter(field, typ, fieldKind, _) {.dirty.} =
-      when fieldKind == CondensateTag:
-        var t = field
-        `=trace`(t, env)
-      elif fieldKind == CondensateValue:
-        cast[ptr typ](addr x)[] = field
-        `=trace`(cast[ptr typ](addr x)[], env)
-    condensateFields(orig, traceIter)
-    x = orig
 
 macro implementCondensateDestructors*(T: untyped) =
   result = getAst(implementCondensateDestructorsImpl(T))

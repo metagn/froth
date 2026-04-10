@@ -76,22 +76,6 @@ else:
     `=destroy`(x.rawMut)
   {.pop.}
 
-proc `=copy`*[T, Tag](dest: var Tagged[T, Tag], src: Tagged[T, Tag]) {.nodestroy.} =
-  when supportsCopyMem(T):
-    dest = src
-  else:
-    let t = splitTagInline(src)
-    `=copy`(dest.rawMut, untagInline(src))
-    dest = withTagInline(dest.raw, t)
-
-proc `=sink`*[T, Tag](dest: var Tagged[T, Tag], src: Tagged[T, Tag]) {.nodestroy.} =
-  when supportsCopyMem(T) or T is ref: # supportsMoveMem
-    dest = src
-  else:
-    let t = splitTagInline(src)
-    `=sink`(dest.rawMut, untagInline(src))
-    dest = withTagInline(dest.raw, t)
-
 proc `=dup`*[T, Tag](x: Tagged[T, Tag]): Tagged[T, Tag] {.nodestroy.} =
   mixin splitTagInline, untagInline, withTagInline
   when supportsCopyMem(T):
@@ -100,6 +84,25 @@ proc `=dup`*[T, Tag](x: Tagged[T, Tag]): Tagged[T, Tag] {.nodestroy.} =
     let t = splitTagInline(x)
     let p = `=dup`(untagInline(x))
     result = withTagInline(p, t)
+
+proc `=copy`*[T, Tag](dest: var Tagged[T, Tag], src: Tagged[T, Tag]) {.nodestroy.} =
+  when supportsCopyMem(T):
+    dest = src
+  else:
+    when false: # https://github.com/nim-lang/Nim/issues/25730
+      let t = splitTagInline(src)
+      `=copy`(dest.rawMut, untagInline(src))
+      dest = withTagInline(dest.raw, t)
+    else:
+      dest = `=dup`(src)
+
+proc `=sink`*[T, Tag](dest: var Tagged[T, Tag], src: Tagged[T, Tag]) {.nodestroy.} =
+  when supportsCopyMem(T) or T is ref: # supportsMoveMem
+    dest = src
+  else:
+    let t = splitTagInline(src)
+    `=sink`(dest.rawMut, untagInline(src))
+    dest = withTagInline(dest.raw, t)
 
 proc `=trace`*[T, Tag](x: var Tagged[T, Tag]; env: pointer) {.nodestroy.} =
   mixin splitTagInline, untagInline, withTagInline

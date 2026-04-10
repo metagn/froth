@@ -12,7 +12,7 @@ var tests: seq[FilePath]
 for dir in ["tests"]:
   for kind, f in walkDir(dir):
     if kind == pcFile and f.endsWith(".nim"):
-      if true and f.endsWith("test_simple_combined.nim"):
+      if (NimMajor, NimMinor, NimPatch) < (2, 2, 10) and f.endsWith("test_simple_combined.nim"):
         # disable test until https://github.com/nim-lang/Nim/pull/25717
         discard
       else:
