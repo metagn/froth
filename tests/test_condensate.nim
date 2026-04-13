@@ -25,8 +25,8 @@ proc initValue*(kind: ValueKind): Value {.inline.} =
 proc initIntValue*(i: int): Value {.inline.} =
   rawCondensate(Value, LowerByte(Int), cast[pointer](i))
 
-proc initSeqValue*(s: seq[Value]): Value {.inline, nodestroy.} =
-  rawCondensate(Value, LowerByte(Seq), cast[pointer](#[`=dup`]#(SeqImpl(children: s))))
+proc initSeqValue*(s: sink SeqImpl): Value {.inline, nodestroy.} =
+  rawCondensate(Value, LowerByte(Seq), cast[pointer](s))
 
 template kind*(val: Value): ValueKind =
   ValueKind(rawTag(val))
@@ -44,11 +44,11 @@ proc toValue*(i: int): Value =
 when defined(gcRefc):
   # object constructor calls genericSeqAssign otherwise
   proc toValue*(s: sink seq[Value]): Value =
-    result = initSeqValue(s)
+    result = initSeqValue(SeqImpl(children: s))
 else:
   # also works with sink but not tested to not rely on it
   proc toValue*(s: seq[Value]): Value =
-    result = initSeqValue(s)
+    result = initSeqValue(SeqImpl(children: s))
 
 proc getInt*(val: Value): int =
   assert val.kind == Int
