@@ -7,15 +7,15 @@ import froth/[common, condensate, lowerbyte]
 
 type
   ValueKind = enum Nil, False, True, Int, Seq
+  TaggedValue = Tagged[pointer, LowerByte]
+  Value = Condensate[FullValue, TaggedValue]
+  SeqImpl = ref object
+    children: seq[Value]
   FullValue = object
     case kind: ValueKind
     of Nil, False, True: discard
     of Int: intValue: int # acts like 56 bit integer i guess since it sign extends like pointers
     of Seq: seqValue: SeqImpl
-  TaggedValue = Tagged[pointer, LowerByte]
-  Value = Condensate[FullValue, TaggedValue]
-  SeqImpl = ref object
-    children: seq[Value]
 
 #implementCondensateDestructors Value
 
