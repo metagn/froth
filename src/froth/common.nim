@@ -128,7 +128,7 @@ when false:
   type SomeTag*[T] = concept
     # does not seem to work due to nim bug, saying cannot instantiate Tagged
     # or my version is old
-    proc withTag(val: T, tag: Self): Tagged[uint, Self]
+    proc withTag(val: T, tag: Self): Tagged[T, Self]
     proc untag(tagged: Tagged[T, Self]): T
     proc splitTag(tagged: Tagged[T, Self]): Self
 
