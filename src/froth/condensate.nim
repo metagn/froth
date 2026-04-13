@@ -269,3 +269,12 @@ proc decondense*[T; Base, Tag](x: Condensate[T, Tagged[Base, Tag]]): T {.inline,
   template decondValueIter(field, typ, fieldName) {.dirty.} =
     result.`fieldName` = `=dup`(field)
   condensateFields(T, x.inner, decondTagIter, decondValueIter)
+
+template rawCondensate*[T; Base, Tag](t: typedesc[Condensate[T, Tagged[Base, Tag]]], tag: Tag, base: Base): t =
+  condensateInline(T, tag, base)
+
+template rawTag*[T; Base, Tag](val: Condensate[T, Tagged[Base, Tag]]): Tag =
+  splitTagInline(val.inner)
+
+template rawDecondense*[T; Base, Tag; V](val: Condensate[T, Tagged[Base, Tag]], _: typedesc[V]): V =
+  cast[V](untagInline(val.inner))

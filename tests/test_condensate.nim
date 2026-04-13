@@ -19,37 +19,49 @@ type
 
 #implementCondensateDestructors Value
 
-proc nilValue*(): Value = condensate(FullValue(kind: Nil), TaggedValue)
-proc toValue*(b: bool): Value = condensate(FullValue(kind: if b: True else: False), TaggedValue)
+proc initValue*(kind: ValueKind): Value {.inline.} =
+  rawCondensate(Value, LowerByte(kind), pointer(nil))
+
+proc initIntValue*(i: int): Value {.inline.} =
+  rawCondensate(Value, LowerByte(Int), cast[pointer](i))
+
+proc initSeqValue*(s: seq[Value]): Value {.inline, nodestroy.} =
+  rawCondensate(Value, LowerByte(Seq), cast[pointer](#[`=dup`]#(SeqImpl(children: s))))
+
+template kind*(val: Value): ValueKind =
+  ValueKind(rawTag(val))
+
+template intValue*(val: Value): int =
+  rawDecondense(val, int)
+
+template seqValue*(val: Value): SeqImpl =
+  rawDecondense(val, SeqImpl)
+
+proc nilValue*(): Value = initValue(Nil)
+proc toValue*(b: bool): Value = initValue(if b: True else: False)
 proc toValue*(i: int): Value =
-  result = condensate(FullValue(kind: Int, intValue: i), TaggedValue)
+  result = initIntValue(i)
 when defined(gcRefc):
   # object constructor calls genericSeqAssign otherwise
   proc toValue*(s: sink seq[Value]): Value =
-    result = condensate(FullValue(kind: Seq, seqValue: SeqImpl(children: s)), TaggedValue)
+    result = initSeqValue(s)
 else:
   # also works with sink but not tested to not rely on it
   proc toValue*(s: seq[Value]): Value =
-    result = condensate(FullValue(kind: Seq, seqValue: SeqImpl(children: s)), TaggedValue)
+    result = initSeqValue(s)
 
 proc getInt*(val: Value): int =
-  let full = decondense(val)
-  assert full.kind == Int
-  full.intValue
+  assert val.kind == Int
+  val.intValue
 proc getSeq*(val: Value): seq[Value] =
-  let full = decondense(val)
-  assert full.kind == Seq
-  full.seqValue.children
+  assert val.kind == Seq
+  val.seqValue.children
 
 proc `$`*(val: Value): string =
-  let full = decondense(val)
-  case full.kind
-  of Nil, False, True: result = $full.kind
-  of Int: result = "Int " & $full.intValue
-  of Seq: result = "Seq " & $full.seqValue.children
-
-proc kind*(val: Value): ValueKind {.inline.} =
-  decondense(val).kind
+  case val.kind
+  of Nil, False, True: result = $val.kind
+  of Int: result = "Int " & $val.intValue
+  of Seq: result = "Seq " & $val.seqValue.children
 
 test "conditional tagging":
   proc test() =
