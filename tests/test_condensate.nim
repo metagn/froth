@@ -3,46 +3,53 @@ when (compiles do: import nimbleutils/bridge):
 else:
   import unittest
 
-import froth/[condensate, lowerbyte]
+import froth/[common, condensate, lowerbyte]
 
 type
   ValueKind = enum Nil, False, True, Int, Seq
-  SeqImpl = ref object
-    children: seq[Value]
-  Value {.condensate.} = object of pointer
-    case kind: ValueKind of LowerByte # converts tag to ValueKind? could also be LowerByte[ValueKind]
+  FullValue = object
+    case kind: ValueKind
     of Nil, False, True: discard
     of Int: intValue: int # acts like 56 bit integer i guess since it sign extends like pointers
     of Seq: seqValue: SeqImpl
-  # Value becomes distinct Tagged[pointer, LowerByte]
+  TaggedValue = Tagged[pointer, LowerByte]
+  Value = Condensate[FullValue, TaggedValue]
+  SeqImpl = ref object
+    children: seq[Value]
 
 #implementCondensateDestructors Value
 
-proc nilValue*(): Value = initValue(Nil)
-proc toValue*(b: bool): Value = initValue(if b: True else: False)
+proc nilValue*(): Value = condensate(FullValue(kind: Nil), TaggedValue)
+proc toValue*(b: bool): Value = condensate(FullValue(kind: if b: True else: False), TaggedValue)
 proc toValue*(i: int): Value =
-  result = initIntValue(Int, i)
+  result = condensate(FullValue(kind: Int, intValue: i), TaggedValue)
 when defined(gcRefc):
   # object constructor calls genericSeqAssign otherwise
   proc toValue*(s: sink seq[Value]): Value =
-    result = initSeqValue(Seq, SeqImpl(children: s))
+    result = condensate(FullValue(kind: Seq, seqValue: SeqImpl(children: s)), TaggedValue)
 else:
   # also works with sink but not tested to not rely on it
   proc toValue*(s: seq[Value]): Value =
-    result = initSeqValue(Seq, SeqImpl(children: s))
+    result = condensate(FullValue(kind: Seq, seqValue: SeqImpl(children: s)), TaggedValue)
 
 proc getInt*(val: Value): int =
-  assert val.kind == Int
-  val.intValue
+  let full = decondense(val)
+  assert full.kind == Int
+  full.intValue
 proc getSeq*(val: Value): seq[Value] =
-  assert val.kind == Seq
-  val.seqValue.children
+  let full = decondense(val)
+  assert full.kind == Seq
+  full.seqValue.children
 
 proc `$`*(val: Value): string =
-  case val.kind
-  of Nil, False, True: result = $val.kind
-  of Int: result = "Int " & $val.intValue
-  of Seq: result = "Seq " & $val.seqValue.children
+  let full = decondense(val)
+  case full.kind
+  of Nil, False, True: result = $full.kind
+  of Int: result = "Int " & $full.intValue
+  of Seq: result = "Seq " & $full.seqValue.children
+
+proc kind*(val: Value): ValueKind {.inline.} =
+  decondense(val).kind
 
 test "conditional tagging":
   proc test() =
