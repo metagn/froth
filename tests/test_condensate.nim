@@ -3,33 +3,52 @@ when (compiles do: import nimbleutils/bridge):
 else:
   import unittest
 
-import froth/[condensate, lowerbyte]
+import froth/[common, condensate, lowerbyte]
 
 type
   ValueKind = enum Nil, False, True, Int, Seq
   SeqImpl = ref object
     children: seq[Value]
-  Value {.condensate.} = object of pointer
-    case kind: ValueKind of LowerByte # converts tag to ValueKind? could also be LowerByte[ValueKind]
+  TaggedValue = Tagged[pointer, LowerByte]
+  Value = Condensate[FullValue, TaggedValue]
+  FullValue = object
+    case kind: ValueKind
     of Nil, False, True: discard
     of Int: intValue: int # acts like 56 bit integer i guess since it sign extends like pointers
     of Seq: seqValue: SeqImpl
-  # Value becomes distinct Tagged[pointer, LowerByte]
 
 #implementCondensateDestructors Value
+
+proc initValue*(kind: ValueKind): Value {.inline.} =
+  rawCondensate(Value, LowerByte(kind), pointer(nil))
+
+proc initIntValue*(i: int): Value {.inline.} =
+  rawCondensate(Value, LowerByte(Int), cast[pointer](i))
+
+proc initSeqValue*(s: sink SeqImpl): Value {.inline, nodestroy.} =
+  rawCondensate(Value, LowerByte(Seq), cast[pointer](s))
+
+template kind*(val: Value): ValueKind =
+  ValueKind(rawTag(val))
+
+template intValue*(val: Value): int =
+  rawDecondense(val, int)
+
+template seqValue*(val: Value): SeqImpl =
+  rawDecondense(val, SeqImpl)
 
 proc nilValue*(): Value = initValue(Nil)
 proc toValue*(b: bool): Value = initValue(if b: True else: False)
 proc toValue*(i: int): Value =
-  result = initIntValue(Int, i)
+  result = initIntValue(i)
 when defined(gcRefc):
   # object constructor calls genericSeqAssign otherwise
   proc toValue*(s: sink seq[Value]): Value =
-    result = initSeqValue(Seq, SeqImpl(children: s))
+    result = initSeqValue(SeqImpl(children: s))
 else:
   # also works with sink but not tested to not rely on it
   proc toValue*(s: seq[Value]): Value =
-    result = initSeqValue(Seq, SeqImpl(children: s))
+    result = initSeqValue(SeqImpl(children: s))
 
 proc getInt*(val: Value): int =
   assert val.kind == Int
